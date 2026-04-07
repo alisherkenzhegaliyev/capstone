@@ -1,215 +1,164 @@
-import torch
-from pathlib import Path
-from io import BytesIO
-import numpy as np
-import cv2
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend
-import matplotlib.pyplot as plt
+"""
+Chest X-ray screening router using CheXNet (DenseNet-121) with Grad-CAM and Grad-CAM++.
 
-import torch.nn.functional as F
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+Architecture:
+  - DenseNet-121 backbone with 14-class classifier head matching
+    the arnoweng/CheXNet checkpoint format (Linear(1024, 14)).
+  - All 14 NIH ChestX-ray14 pathologies are evaluated per image.
+  - sigmoid(output) gives per-class probabilities.
+
+Weight download (required for meaningful predictions):
+  1. Go to https://github.com/arnoweng/CheXNet
+  2. Download model.pth.tar from the releases section
+  3. Place it at:  capstone-main/backend/models/chexnet.pth.tar
+
+Explainability:
+  - GradCAM and GradCAM++ via the pytorch-grad-cam library (grad-cam package)
+  - Target layer: model.features.denseblock4 (last conv block in DenseNet-121)
+  - Heatmaps are pre-computed for the top N findings above the confidence threshold
+  - All images returned as base64 PNG strings in a single /predict call
+
+Endpoints:
+  POST /predict   - returns status + 14 ranked findings + per-finding heatmaps + original image
+"""
+
+import base64
+import logging
+from io import BytesIO
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torchvision
+import torchvision.transforms as T
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from PIL import Image
 
-from open_clip import create_model_from_pretrained, get_tokenizer
+from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
+from pytorch_grad_cam.utils.image import show_cam_on_image
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ======================================================
-# CONFIG — BiomedCLIP Model Configuration
+# CONFIG
 # ======================================================
-MODEL_HUB_NAME = 'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224'
-CONTEXT_LENGTH = 256
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# MAIN LABEL LIST USING BEST PRACTICES (matching Colab configuration)
-LABELS = [
-    'normal chest X-ray',
-    'pneumonia chest X-ray',
-    'bacterial pneumonia chest X-ray',
-    'viral pneumonia chest X-ray',
-    'chest X-ray with lung infection',
-    'healthy lungs chest X-ray',
-    'chest X-ray with consolidation',
-    'chest X-ray with infiltrates',
+# Place downloaded CheXNet weights here (required for real predictions)
+WEIGHTS_PATH = Path("models/chexnet.pth.tar")
+
+N_CLASSES = 14
+
+# NIH ChestX-ray14 class names (order matches the arnoweng/CheXNet checkpoint)
+CLASS_NAMES = [
+    "Atelectasis",        # 0
+    "Cardiomegaly",       # 1
+    "Effusion",           # 2
+    "Infiltration",       # 3
+    "Mass",               # 4
+    "Nodule",             # 5
+    "Pneumonia",          # 6
+    "Pleural Thickening", # 7
+    "Consolidation",      # 8
+    "Edema",              # 9
+    "Emphysema",          # 10
+    "Fibrosis",           # 11
+    "Pneumothorax",       # 12
+    "Hernia",             # 13
 ]
 
-TEMPLATE = 'this is a photo of '
+# Findings with probability >= this threshold are flagged as detected
+CONFIDENCE_THRESHOLD = 0.3
 
-# Set device
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+# Maximum number of findings to pre-compute Grad-CAM heatmaps for
+MAX_HEATMAPS = 5
 
-# ======================================================
-# LOAD MODEL, TOKENIZER & PREPROCESS
-# ======================================================
-print("Loading BiomedCLIP from Hugging Face Hub...")
-try:
-    model, preprocess = create_model_from_pretrained(MODEL_HUB_NAME)
-    tokenizer = get_tokenizer(MODEL_HUB_NAME)
-    
-    print(f"Using device: {device}")
-    model.to(device)
-    model.eval()
-    print("✅ Model loaded successfully and ready!")
-    
-except Exception as e:
-    print(f"Error loading model: {e}")
-    model = None
-    tokenizer = None
-    preprocess = None
+# ImageNet normalisation — must match CheXNet training pipeline
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD  = [0.229, 0.224, 0.225]
 
-print("Backend ready.")
-
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"}
 
 # ======================================================
-# GRADCAM CLASS FOR BIOMEDCLIP (ViT)
+# MODEL LOADING
 # ======================================================
-class GradCAM_BiomedCLIP:
+def _build_model() -> nn.Module:
     """
-    Minimal Grad-CAM-style implementation for BiomedCLIP's ViT visual encoder.
-    We hook into the last transformer block (norm1) and compute token-wise
-    importance, which we then reshape into a 2D patch map (e.g., 14x14).
+    Build DenseNet-121 with a 14-class head matching the arnoweng/CheXNet
+    checkpoint format.
     """
-    def __init__(self, model):
-        self.model = model
-        self.activations = None  # [B, seq_len, dim]
-        self.gradients = None    # [B, seq_len, dim]
+    model = torchvision.models.densenet121(weights="IMAGENET1K_V1")
+    num_features = model.classifier.in_features  # 1024
+    model.classifier = nn.Linear(num_features, N_CLASSES)
 
-    def _save_activations(self, module, inp, out):
-        self.activations = out
-
-    def _save_gradients(self, module, grad_input, grad_output):
-        # grad_output is a tuple; we want gradient wrt activations
-        self.gradients = grad_output[0]
-
-    def get_target_layer(self):
-        """
-        Get the last meaningful layer in the visual transformer for Grad-CAM.
-        This follows current OpenCLIP / timm structure.
-        """
-        visual = self.model.visual
-
-        # OpenCLIP vision tower usually has a "trunk" with "blocks"
-        if hasattr(visual, "trunk"):
-            trunk = visual.trunk
-            if hasattr(trunk, "blocks") and len(trunk.blocks) > 0:
-                last_block = trunk.blocks[-1]
-                # Prefer norm1 if it exists (good for ViT Grad-CAM)
-                if hasattr(last_block, "norm1"):
-                    return last_block.norm1
-                return last_block
-
-        # Fallback: just return the whole visual module (not ideal, but safe)
-        return visual
-
-    def compute_cam(self, image_tensor, texts, target_index, device):
-        """
-        image_tensor: (1, 3, H, W) preprocessed image
-        texts: tokenized labels (N_labels, ...)
-        target_index: index of the label we want CAM for
-        """
-        # Get target layer and register hooks
-        target_layer = self.get_target_layer()
-        fwd_handle = target_layer.register_forward_hook(self._save_activations)
-        bwd_handle = target_layer.register_full_backward_hook(self._save_gradients)
-
-        # Forward (with gradients enabled for image)
-        image_tensor = image_tensor.to(device)
-        image_tensor.requires_grad_(True)
-
-        # Full BiomedCLIP forward using encode_image / encode_text
-        image_features = self.model.encode_image(image_tensor)
-        text_features = self.model.encode_text(texts)
-
-        # Similarity score for the chosen label
-        # (cosine-like similarity, but we treat it as scalar we can backprop through)
-        similarity = (image_features @ text_features.t())[0, target_index]
-
-        # Backward
-        self.model.zero_grad(set_to_none=True)
-        similarity.backward(retain_graph=False)
-
-        # Remove hooks
-        fwd_handle.remove()
-        bwd_handle.remove()
-
-        # Sanity checks
-        if self.activations is None or self.gradients is None:
-            raise RuntimeError("GradCAM: activations or gradients were not captured")
-
-        # activations: [1, seq_len, dim], gradients: [1, seq_len, dim]
-        activations = self.activations[0]  # [seq_len, dim]
-        gradients = self.gradients[0]      # [seq_len, dim]
-
-        # Remove CLS token if present (usually first token)
-        if activations.shape[0] > 196:  # more than 14x14 patches
-            activations = activations[1:]
-            gradients = gradients[1:]
-
-        # Global average pooling of gradients over embedding dim
-        weights = gradients.mean(dim=1)         # [seq_len]
-        cam = (activations * weights.unsqueeze(1)).sum(dim=1)  # [seq_len]
-
-        cam = F.relu(cam)
-
-        # Normalize
-        cam = cam.detach().cpu().numpy()
-        cam = cam - cam.min()
-        if cam.max() > 0:
-            cam = cam / cam.max()
-
-        return cam  # 1D array over patches
-
-
-print("✅ GradCAM_BiomedCLIP helper defined.")
-
-
-# ======================================================
-# GRADCAM HEATMAP OVERLAY FUNCTION
-# ======================================================
-def apply_gradcam_heatmap(original_img_pil, cam_flat, alpha=0.4):
-    """
-    Overlay Grad-CAM heatmap on original image.
-
-    Args:
-        original_img_pil: PIL Image object (RGB)
-        cam_flat: 1D CAM vector over ViT patches or 2D map
-        alpha: heatmap transparency
-
-    Returns:
-        overlayed (H,W,3), heatmap (H,W,3), cam_resized (H,W) arrays
-    """
-    original_np = np.array(original_img_pil)
-    h, w = original_np.shape[:2]
-
-    # Convert CAM to 2D map
-    cam = np.array(cam_flat)
-    if cam.ndim == 1:
-        # Treat as flattened patch grid (e.g., 14x14)
-        patch_side = int(np.sqrt(len(cam)))
-        cam_map = cam.reshape(patch_side, patch_side)
-    elif cam.ndim == 2:
-        cam_map = cam
+    if WEIGHTS_PATH.exists():
+        logger.info("Loading CheXNet weights from %s", WEIGHTS_PATH)
+        checkpoint = torch.load(WEIGHTS_PATH, map_location=DEVICE)
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        remapped = {}
+        for k, v in state_dict.items():
+            k = k.replace("module.", "")
+            k = k.replace("densenet121.", "")
+            k = k.replace("classifier.0.", "classifier.")
+            k = k.replace(".norm.1.", ".norm1.")
+            k = k.replace(".norm.2.", ".norm2.")
+            k = k.replace(".conv.1.", ".conv1.")
+            k = k.replace(".conv.2.", ".conv2.")
+            remapped[k] = v
+        model.load_state_dict(remapped)
+        logger.info("CheXNet weights loaded successfully")
     else:
-        raise ValueError(f"Unexpected CAM shape: {cam.shape}")
+        logger.warning(
+            "CheXNet weights not found at %s — predictions are RANDOM (ImageNet init only). "
+            "Download model.pth.tar from https://github.com/arnoweng/CheXNet",
+            WEIGHTS_PATH,
+        )
 
-    # Resize CAM to image size
-    cam_resized = cv2.resize(cam_map, (w, h))
+    model.to(DEVICE)
+    model.eval()
+    return model
 
-    # Normalize again for visualization (0–1)
-    cam_resized = cam_resized - cam_resized.min()
-    if cam_resized.max() > 0:
-        cam_resized = cam_resized / cam_resized.max()
 
-    # Create heatmap
-    heatmap = np.uint8(255 * cam_resized)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-    heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+print("Loading CheXNet model (DenseNet-121)...")
+try:
+    model = _build_model()
+    print(f"Model ready on {DEVICE}")
+except Exception as exc:
+    logger.error("Failed to load model: %s", exc)
+    model = None
 
-    # Blend original and heatmap
-    overlayed = cv2.addWeighted(original_np, 1 - alpha, heatmap, alpha, 0)
+# ======================================================
+# PREPROCESSING
+# ======================================================
+_normalise = T.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+_to_tensor = T.ToTensor()
 
-    return overlayed, heatmap, cam_resized
+
+def preprocess(pil_img: Image.Image):
+    """
+    Resize to 224x224, convert to RGB, return:
+      - img_tensor: [1, 3, 224, 224] normalised tensor on DEVICE
+      - img_rgb_norm: (224, 224, 3) float32 ndarray in [0, 1] for show_cam_on_image
+    """
+    img_resized = pil_img.resize((224, 224)).convert("RGB")
+    img_np = np.array(img_resized, dtype=np.float32) / 255.0
+    img_tensor = _normalise(_to_tensor(img_resized)).unsqueeze(0).to(DEVICE)
+    return img_tensor, img_np
+
+
+# ======================================================
+# HELPERS
+# ======================================================
+def _ndarray_to_base64(arr: np.ndarray) -> str:
+    """Convert a (H, W, 3) uint8 RGB array to a data-URI base64 PNG string."""
+    pil_img = Image.fromarray(arr.astype(np.uint8))
+    buf = BytesIO()
+    pil_img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/png;base64,{b64}"
 
 
 # ======================================================
@@ -218,182 +167,96 @@ def apply_gradcam_heatmap(original_img_pil, cam_flat, alpha=0.4):
 @router.post("/predict")
 async def predict(file: UploadFile = File(...)):
     """
-    Pneumonia prediction endpoint for chest X-ray images.
-    Accepts image files and returns predictions with confidence scores.
-    Uses BiomedCLIP model loaded from Hugging Face Hub.
+    Accepts a chest X-ray image and returns:
+      - status: "ABNORMAL" or "NORMAL"
+      - findings: all 14 pathologies ranked by probability, with Grad-CAM
+        heatmaps for the top findings above the confidence threshold
+      - original_image: base64 PNG of the resized 224x224 input
+      - filename, threshold, model metadata
     """
-    # Check if model and tokenizer are loaded
-    if model is None or tokenizer is None or preprocess is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Model or tokenizer not loaded. Please check server logs for initialization errors."
-        )
-    
-    # Validate file type
-    allowed_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in allowed_extensions:
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded — check server logs.")
+
+    # --- Validate file type ---
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type. Allowed types: {', '.join(allowed_extensions)}"
+            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
         )
-    
+
+    # --- Read image ---
     try:
-        # Read image
         contents = await file.read()
-        img = Image.open(BytesIO(contents)).convert("RGB")
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to read image: {str(e)}"
-        )
+        original_pil = Image.open(BytesIO(contents)).convert("RGB")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read image: {exc}")
 
     try:
-        # Preprocess image (matching Colab approach)
-        img_tensor = preprocess(img).unsqueeze(0).to(device)
+        # --- Preprocess ---
+        img_tensor, img_rgb_norm = preprocess(original_pil)
 
-        # Tokenize all labels with context length (matching Colab)
-        texts = tokenizer([TEMPLATE + l for l in LABELS], context_length=CONTEXT_LENGTH).to(device)
-
-        # Inference (matching Colab approach)
+        # --- Forward pass ---
         with torch.no_grad():
-            image_features, text_features, logit_scale = model(img_tensor, texts)
-            logits = (logit_scale * image_features @ text_features.t()).detach().softmax(dim=-1)
-            sorted_indices = torch.argsort(logits, dim=-1, descending=True)
-            
-            # Convert to CPU numpy/lists
-            logits = logits.cpu().numpy()[0]
-            sorted_indices = sorted_indices.cpu().numpy()[0]
+            logits = model(img_tensor)                           # [1, 14]
+            probs = torch.sigmoid(logits[0]).cpu().numpy()       # (14,)
 
-        # Build predictions list
-        predictions = []
-        for i, idx in enumerate(sorted_indices):
-            predictions.append({
-                "label": LABELS[idx],
-                "confidence": float(logits[idx])
+        # --- Determine which findings get heatmaps ---
+        ranked_indices = np.argsort(probs)[::-1]  # descending probability
+        heatmap_indices = [
+            int(i) for i in ranked_indices[:MAX_HEATMAPS]
+            if probs[i] >= CONFIDENCE_THRESHOLD
+        ]
+
+        # --- Grad-CAM for top findings ---
+        target_layers = [model.features.denseblock4.denselayer16.conv2]
+        heatmap_data = {}  # class_index -> {"gradcam": b64, "gradcam_plus": b64}
+
+        if heatmap_indices:
+            img_for_cam = img_tensor.clone().detach().requires_grad_(True)
+            with GradCAM(model=model, target_layers=target_layers) as cam_obj:
+                for cls_idx in heatmap_indices:
+                    targets = [ClassifierOutputTarget(cls_idx)]
+                    grayscale = cam_obj(input_tensor=img_for_cam, targets=targets)
+                    overlay = show_cam_on_image(img_rgb_norm, grayscale[0], use_rgb=True)
+                    heatmap_data.setdefault(cls_idx, {})["gradcam"] = _ndarray_to_base64(overlay)
+
+            img_for_cam = img_tensor.clone().detach().requires_grad_(True)
+            with GradCAMPlusPlus(model=model, target_layers=target_layers) as cam_pp_obj:
+                for cls_idx in heatmap_indices:
+                    targets = [ClassifierOutputTarget(cls_idx)]
+                    grayscale = cam_pp_obj(input_tensor=img_for_cam, targets=targets)
+                    overlay = show_cam_on_image(img_rgb_norm, grayscale[0], use_rgb=True)
+                    heatmap_data.setdefault(cls_idx, {})["gradcam_plus"] = _ndarray_to_base64(overlay)
+
+        # --- Build findings list (all 14, sorted by probability) ---
+        findings = []
+        for i in ranked_indices:
+            idx = int(i)
+            has_heatmaps = idx in heatmap_data
+            findings.append({
+                "class_index": idx,
+                "class_name": CLASS_NAMES[idx],
+                "probability": round(float(probs[idx]), 4),
+                "has_heatmaps": has_heatmaps,
+                "gradcam_image": heatmap_data.get(idx, {}).get("gradcam"),
+                "gradcam_plus_image": heatmap_data.get(idx, {}).get("gradcam_plus"),
             })
 
-        # Top prediction
-        top = predictions[0]
+        # --- Overall status ---
+        status = "ABNORMAL" if any(probs[i] >= CONFIDENCE_THRESHOLD for i in range(N_CLASSES)) else "NORMAL"
 
-        # Pneumonia detection logic (matching Colab)
-        is_pneumonia = 'pneumonia' in top["label"].lower()
+        original_display = (img_rgb_norm * 255).astype(np.uint8)
 
         return {
-            "top_prediction": top,
-            "all_predictions": predictions,
-            "is_pneumonia": is_pneumonia,
-            "filename": file.filename
+            "status": status,
+            "findings": findings,
+            "original_image": _ndarray_to_base64(original_display),
+            "filename": file.filename,
+            "threshold": CONFIDENCE_THRESHOLD,
+            "model": "CheXNet (DenseNet-121)",
         }
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction failed: {str(e)}"
-        )
 
-
-# ======================================================
-# VISUALIZATION ENDPOINT WITH GRADCAM
-# ======================================================
-@router.post("/visualize")
-async def visualize(file: UploadFile = File(...)):
-    """
-    Generate GradCAM visualization for chest X-ray images.
-    Returns a JPG image with three panels: original, CAM heatmap, and overlay.
-    """
-    # Check if model and tokenizer are loaded
-    if model is None or tokenizer is None or preprocess is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Model or tokenizer not loaded. Please check server logs for initialization errors."
-        )
-    
-    # Validate file type
-    allowed_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file type. Allowed types: {', '.join(allowed_extensions)}"
-        )
-    
-    try:
-        # Read image
-        contents = await file.read()
-        original_img = Image.open(BytesIO(contents)).convert("RGB")
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to read image: {str(e)}"
-        )
-
-    try:
-        # Preprocess image
-        img_tensor = preprocess(original_img).unsqueeze(0).to(device)
-
-        # Tokenize all labels
-        texts = tokenizer([TEMPLATE + l for l in LABELS], context_length=CONTEXT_LENGTH).to(device)
-
-        # Get prediction first
-        with torch.no_grad():
-            image_features, text_features, logit_scale = model(img_tensor, texts)
-            logits = (logit_scale * image_features @ text_features.t()).detach().softmax(dim=-1)
-            logits_np = logits[0].cpu().numpy()
-            top_idx = int(np.argmax(logits_np))
-            top_label = LABELS[top_idx]
-            top_conf = float(logits_np[top_idx] * 100.0)
-
-        # Generate GradCAM
-        gradcam = GradCAM_BiomedCLIP(model)
-        cam_flat = gradcam.compute_cam(
-            image_tensor=img_tensor.detach(),
-            texts=texts,
-            target_index=top_idx,
-            device=device
-        )
-
-        # Create heatmap overlay
-        overlayed, heatmap, cam_resized = apply_gradcam_heatmap(original_img, cam_flat, alpha=0.4)
-
-        # Create visualization with three panels
-        fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-
-        # Original
-        axes[0].imshow(original_img)
-        axes[0].set_title("Original X-ray", fontsize=12, fontweight='bold')
-        axes[0].axis("off")
-
-        # CAM map only
-        im1 = axes[1].imshow(cam_resized, cmap='jet')
-        axes[1].set_title("Grad-CAM Activation", fontsize=12, fontweight='bold')
-        axes[1].axis("off")
-        plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
-
-        # Overlay
-        axes[2].imshow(overlayed)
-        axes[2].set_title(f"{top_label}\n({top_conf:.1f}%)", fontsize=11, fontweight='bold')
-        axes[2].axis("off")
-
-        plt.tight_layout()
-
-        # Save to BytesIO as JPG
-        buf = BytesIO()
-        plt.savefig(buf, format='jpg', dpi=150, bbox_inches='tight')
-        buf.seek(0)
-        plt.close()
-
-        # Return as streaming response
-        return StreamingResponse(
-            buf,
-            media_type="image/jpeg",
-            headers={
-                "Content-Disposition": f"inline; filename={Path(file.filename).stem}_gradcam.jpg"
-            }
-        )
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Visualization failed: {str(e)}"
-        )
+    except Exception as exc:
+        logger.exception("Prediction failed for %s", file.filename)
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}")

@@ -6,7 +6,7 @@ import FileUploader from "./FileUploader";
 import ResultsView from "./ResultsView";
 import BatchResultsView from "./BatchResultsView";
 import XrayVisualizationView from "./XrayVisualizationView";
-import { analyzePdf, analyzeBatch, predictXray, visualizeXray } from "../api/api";
+import { analyzePdf, analyzeBatch, predictXray } from "../api/api";
 import { DotScreenShader } from "./DotScreenShader";
 
 export default function UploadForm() {
@@ -16,7 +16,6 @@ export default function UploadForm() {
     null
   );
   const [xrayPrediction, setXrayPrediction] = useState<XrayPrediction | null>(null);
-  const [xrayVisualization, setXrayVisualization] = useState<string | null>(null);
 
   async function handleUpload(file: File) {
     setLoading(true);
@@ -27,17 +26,9 @@ export default function UploadForm() {
                         file.name.toLowerCase().endsWith(ext));
 
       if (isImage) {
-        // Process X-ray image
-        const [prediction, visualizationBlob] = await Promise.all([
-          predictXray(file),
-          visualizeXray(file)
-        ]);
-        
-        // Create object URL for visualization image
-        const visualizationUrl = URL.createObjectURL(visualizationBlob);
-        
+        // Single call — predict returns prediction + all three images as base64
+        const prediction = await predictXray(file);
         setXrayPrediction(prediction);
-        setXrayVisualization(visualizationUrl);
         setResult(null);
         setBatchResult(null);
       } else if (isZip) {
@@ -45,13 +36,11 @@ export default function UploadForm() {
         setBatchResult(data);
         setResult(null);
         setXrayPrediction(null);
-        setXrayVisualization(null);
       } else {
         const data = await analyzePdf(file);
         setResult(data);
         setBatchResult(null);
         setXrayPrediction(null);
-        setXrayVisualization(null);
       }
     } catch (err) {
       console.error(err);
@@ -61,14 +50,9 @@ export default function UploadForm() {
   }
 
   function handleReset() {
-    // Revoke object URL to prevent memory leaks
-    if (xrayVisualization) {
-      URL.revokeObjectURL(xrayVisualization);
-    }
     setResult(null);
     setBatchResult(null);
     setXrayPrediction(null);
-    setXrayVisualization(null);
   }
 
   return (
@@ -99,10 +83,9 @@ export default function UploadForm() {
           {batchResult && (
             <BatchResultsView result={batchResult} onReset={handleReset} />
           )}
-          {xrayPrediction && xrayVisualization && (
+          {xrayPrediction && (
             <XrayVisualizationView
               prediction={xrayPrediction}
-              visualizationUrl={xrayVisualization}
               onReset={handleReset}
             />
           )}

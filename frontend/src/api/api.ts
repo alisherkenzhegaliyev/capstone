@@ -29,7 +29,9 @@ export async function analyzeBatch(file: File): Promise<BatchAnalyzeResponse> {
   return res.data;
 }
 
-// Get prediction for X-ray image
+// Screen chest X-ray for 14 pathologies using CheXNet.
+// Returns status, ranked findings with per-finding Grad-CAM heatmaps,
+// and the original image as base64 PNG.
 export async function predictXray(file: File): Promise<XrayPrediction> {
   const formData = new FormData();
   formData.append("file", file);
@@ -38,21 +40,6 @@ export async function predictXray(file: File): Promise<XrayPrediction> {
     headers: {
       "Content-Type": "multipart/form-data",
     },
-  });
-
-  return res.data;
-}
-
-// Get GradCAM visualization for X-ray image (returns image blob)
-export async function visualizeXray(file: File): Promise<Blob> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await axios.post(`${API_BASE}/visualize`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-    responseType: "blob", // Important: get binary data
   });
 
   return res.data;

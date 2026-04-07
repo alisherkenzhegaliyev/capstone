@@ -4,11 +4,14 @@ from app.routers.chd import router as chd_router
 from app.routers.readmission import router as readmission_router
 from fastapi.middleware.cors import CORSMiddleware
 
-# analyze router requires torch — only import if available
+# analyze router requires torch + grad-cam — only import if available
 try:
     from app.routers.analyze import router as analyze_router
     _analyze_available = True
-except ModuleNotFoundError:
+except Exception as _e:
+    import traceback
+    print(f"WARNING: analyze router not loaded — {_e}")
+    traceback.print_exc()
     _analyze_available = False
 
 
