@@ -3,9 +3,19 @@
 ## Setup
 
 ### 1. Get the model files (not included in this repo)
-The `backend/models/` folder is not tracked in git due to file size. Request it from the team and place it at:
+The `backend/models/` folder is not tracked in git due to file size.
+
+**Chest X-ray model (CheXNet):**
+Download `model.pth.tar` from the [arnoweng/CheXNet releases](https://github.com/arnoweng/CheXNet) and rename/place it at:
+```
+capstone-main/backend/models/chexnet.pth.tar
+```
+This is a DenseNet-121 trained on NIH ChestX-ray14 (~81 MB). Without it the endpoint still runs but predictions will be random (ImageNet weights only).
+
+**Tabular models** — request the following from the team and place them at:
 ```
 capstone-main/backend/models/
+├── chexnet.pth.tar          ← download separately (see above)
 ├── coronary/
 │   ├── best_model_v2.pkl
 │   ├── preprocessor.pkl
