@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { MoveDown, MoveRight } from "lucide-react";
 import { DotScreenShader } from "./DotScreenShader";
 
 function Hero() {
