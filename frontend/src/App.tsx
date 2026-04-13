@@ -1,8 +1,9 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Hero from "./components/Hero";
 import UploadForm from "./components/UploadForm";
-import { DotScreenShader } from "./components/DotScreenShader";
+import ClinicalPage from "./pages/ClinicalPage";
 
-function App() {
+function HomePage() {
   return (
     <div className="bg-white min-h-screen">
       <Hero />
@@ -12,6 +13,17 @@ function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/clinical" element={<ClinicalPage />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

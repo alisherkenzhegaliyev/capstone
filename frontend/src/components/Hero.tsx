@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MoveDown, MoveRight } from "lucide-react";
 import { DotScreenShader } from "./DotScreenShader";
 
 function Hero() {
+  const navigate = useNavigate();
   const [titleNumber, setTitleNumber] = useState(0);
   const titles = useMemo(
     () => ["smarter", "faster", "clearer"],
@@ -81,6 +83,12 @@ function Hero() {
               className="inline-flex items-center justify-center gap-4 px-10 py-3 h-14 rounded-lg text-base font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors shadow-md !bg-red-500 hover:!bg-red-600"
             >
               Explore
+            </button>
+            <button
+              onClick={() => navigate("/clinical")}
+              className="inline-flex items-center justify-center gap-4 px-10 py-3 h-14 rounded-lg text-base font-semibold bg-white text-red-500 border-2 border-red-500 hover:bg-red-50 transition-colors shadow-md"
+            >
+              Clinical Decision Support
             </button>
           </div>
         </div>

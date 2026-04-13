@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from app.routers.analyze import router as analyze_router
+from app.routers.chd import router as chd_router
+from app.routers.readmission import router as readmission_router
 from fastapi.middleware.cors import CORSMiddleware
+
+# analyze router requires torch + grad-cam — only import if available
+try:
+    from app.routers.analyze import router as analyze_router
+    _analyze_available = True
+except Exception as _e:
+    import traceback
+    print(f"WARNING: analyze router not loaded — {_e}")
+    traceback.print_exc()
+    _analyze_available = False
 
 
 app = FastAPI()
@@ -28,4 +39,7 @@ app.add_middleware(
 # Static files for annotated images
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-app.include_router(analyze_router)
+if _analyze_available:
+    app.include_router(analyze_router)
+app.include_router(chd_router, prefix="/chd", tags=["CHD Risk"])
+app.include_router(readmission_router, prefix="/readmission", tags=["Readmission Risk"])

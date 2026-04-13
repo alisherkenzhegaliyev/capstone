@@ -61,3 +61,8 @@ typing_extensions==4.15.0
 urllib3==2.5.0
 uvicorn==0.38.0
 wcwidth==0.2.14
+lightgbm>=4.0
+shap>=0.44
+lime>=0.2
+pandas>=2.0
+imbalanced-learn>=0.11

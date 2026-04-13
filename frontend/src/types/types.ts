@@ -49,15 +49,21 @@ export interface BatchAnalyzeResponse {
   result: Record<string, Record<string, BatchPageResult> | { error: string }>;
 }
 
-// X-ray analysis types
-export interface PredictionLabel {
-  label: string;
-  confidence: number;
+// X-ray analysis types — multi-label screening
+export interface Finding {
+  class_index: number;
+  class_name: string;
+  probability: number;
+  has_heatmaps: boolean;
+  gradcam_image: string | null;
+  gradcam_plus_image: string | null;
 }
 
 export interface XrayPrediction {
-  top_prediction: PredictionLabel;
-  all_predictions: PredictionLabel[];
-  is_pneumonia: boolean;
+  status: "ABNORMAL" | "NORMAL";
+  findings: Finding[];          // all 14 pathologies, sorted by probability desc
+  original_image: string;       // data:image/png;base64,...
   filename: string;
+  threshold: number;
+  model: string;
 }
