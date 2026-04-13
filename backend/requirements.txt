@@ -30,6 +30,7 @@ open_clip_torch==3.2.0
 opencv-python==4.12.0.88
 packaging==25.0
 pillow==12.0.0
+PyMuPDF==1.26.5
 pydantic==2.12.4
 pydantic_core==2.41.5
 pyparsing==3.2.5
@@ -58,6 +59,7 @@ ttach==0.0.3
 typer-slim==0.20.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
+ultralytics==8.3.230
 urllib3==2.5.0
 uvicorn==0.38.0
 wcwidth==0.2.14
