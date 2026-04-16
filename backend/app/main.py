@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.routers.chd import router as chd_router
@@ -14,8 +16,9 @@ except Exception as _e:
     traceback.print_exc()
     _analyze_available = False
 
-
 app = FastAPI()
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = BACKEND_DIR / "static"
 
 origins = [
     "http://localhost:5173",   # frontend
@@ -35,9 +38,9 @@ app.add_middleware(
 )
 
 
-
 # Static files for annotated images
-app.mount("/static", StaticFiles(directory="static"), name="static")
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if _analyze_available:
     app.include_router(analyze_router)

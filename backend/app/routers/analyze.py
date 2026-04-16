@@ -46,9 +46,10 @@ router = APIRouter()
 # CONFIG
 # ======================================================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 # Place downloaded CheXNet weights here (required for real predictions)
-WEIGHTS_PATH = Path("models/chexnet.pth.tar")
+WEIGHTS_PATH = BACKEND_DIR / "models" / "chexnet.pth.tar"
 
 N_CLASSES = 14
 

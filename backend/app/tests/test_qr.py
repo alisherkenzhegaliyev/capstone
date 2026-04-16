@@ -1,9 +1,11 @@
 from ultralytics import YOLO
 from PIL import Image
 import sys
+from pathlib import Path
 
 
-MODEL_PATH = "./models/qrcode.pt"
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+MODEL_PATH = BACKEND_DIR / "models" / "qrcode.pt"
 
 CONF = 0.65
 def main():
@@ -11,14 +13,22 @@ def main():
         print("Usage: python test_qr.py <image_path>")
         return
 
-    image_path = sys.argv[1]
+    image_path = Path(sys.argv[1]).expanduser().resolve()
+    if not image_path.exists():
+        print(f"❌ Image file not found: {image_path}")
+        return
+
+    if not MODEL_PATH.exists():
+        print(f"❌ QR model not found: {MODEL_PATH}")
+        return
+
     print(f"🔍 Running inference on {image_path}")
 
     # Load YOLO model
-    model = YOLO(MODEL_PATH)
+    model = YOLO(str(MODEL_PATH))
 
     # Run prediction
-    results = model.predict(image_path, conf=CONF)
+    results = model.predict(str(image_path), conf=CONF)
 
     # Parse and print results
     for result in results:
@@ -34,7 +44,7 @@ def main():
 
     # Save annotated image
     annotated = results[0].plot()
-    out = "annotated.jpg"
+    out = BACKEND_DIR / "static" / "annotated.jpg"
     Image.fromarray(annotated[..., ::-1]).save(out)
     print(f"\n✅ Annotated result saved to {out}")
 
