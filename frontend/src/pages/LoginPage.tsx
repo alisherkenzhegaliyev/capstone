@@ -56,7 +56,7 @@ export default function LoginPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
-              placeholder="doctor@example.com"
+              placeholder="dr.maya.kim@northstar-clinic.test"
               required
             />
           </label>

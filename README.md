@@ -53,25 +53,51 @@ docker compose up --build
 
 Default login credentials from `docker-compose.yml`:
 
-- Email: `doctor@example.com`
-- Password: `changeme123`
+- Email: `dr.maya.kim@northstar-clinic.test`
+- Password: `NorthstarDemo!2026`
 
 Override them with environment variables before startup if needed.
 
-### 3. Manual backend
+### 3. Manual startup without Docker
+
+Start PostgreSQL locally first.
+
+If you installed PostgreSQL with Homebrew, use the version you actually have:
+
+```bash
+brew list | rg postgresql
+brew services start postgresql@15
+```
+
+If this is the first run, create the app role and database:
+
+```bash
+createuser -s capstone
+createdb -O capstone capstone
+psql -d postgres -c "ALTER USER capstone WITH PASSWORD 'capstone';"
+```
+
+You can verify PostgreSQL is listening on `localhost:5432` with:
+
+```bash
+pg_isready -h localhost -p 5432
+```
+
+### 4. Manual backend
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate
+python3.11 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 export DATABASE_URL='postgresql+psycopg://capstone:capstone@localhost:5432/capstone'
-export APP_LOGIN_EMAIL='doctor@example.com'
-export APP_LOGIN_PASSWORD='changeme123'
+export APP_LOGIN_EMAIL='dr.maya.kim@northstar-clinic.test'
+export APP_LOGIN_PASSWORD='NorthstarDemo!2026'
+export JWT_SECRET='change-me-in-production'
 uvicorn app.main:app --reload
 ```
 
-### 4. Manual frontend
+### 5. Manual frontend
 
 ```bash
 cd frontend
@@ -82,3 +108,8 @@ npm run dev
 Frontend: `http://localhost:5173`
 
 Backend docs: `http://localhost:8000/docs`
+
+Manual login credentials:
+
+- Email: `dr.maya.kim@northstar-clinic.test`
+- Password: `NorthstarDemo!2026`

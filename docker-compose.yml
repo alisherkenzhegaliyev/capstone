@@ -19,8 +19,8 @@ services:
     container_name: innovatex-backend
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://capstone:capstone@postgres:5432/capstone}
-      APP_LOGIN_EMAIL: ${APP_LOGIN_EMAIL:-doctor@example.com}
-      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:-changeme123}
+      APP_LOGIN_EMAIL: ${APP_LOGIN_EMAIL:-dr.maya.kim@northstar-clinic.test}
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:-NorthstarDemo!2026}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
     ports:
       - "8000:8000"
