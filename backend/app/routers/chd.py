@@ -4,6 +4,8 @@ Case 1: CHD Risk Prediction API endpoints.
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.services.chd_predictor import predict_chd, explain_shap, explain_lime
+from app.services.llm_summarizer import summarize_chd
+
 
 router = APIRouter()
 
@@ -29,7 +31,8 @@ def chd_predict(patient: PatientCHD):
     data = patient.model_dump()
     result = predict_chd(data)
     shap_exp = explain_shap(data)
-    return {**result, "shap_explanation": shap_exp}
+    summary = summarize_chd(result["probability"], result["risk_level"], shap_exp["features"])
+    return {**result, "shap_explanation": shap_exp, "summary": summary}
 
 
 @router.post("/explain-lime")

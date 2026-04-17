@@ -18,6 +18,7 @@ interface UploadFormProps {
 export default function UploadForm({ initialEntry }: UploadFormProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [xrayPrediction, setXrayPrediction] = useState<XrayPrediction | null>(initialEntry?.prediction ?? null);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function UploadForm({ initialEntry }: UploadFormProps) {
 
   async function handleUpload(file: File) {
     setLoading(true);
+    setError(null);
     try {
       const prediction = await predictXray(file);
       setXrayPrediction(prediction);
@@ -39,21 +41,15 @@ export default function UploadForm({ initialEntry }: UploadFormProps) {
       }
     } catch (err) {
       console.error(err);
-
-      let errorMessage = "Upload failed. Please try again.";
-
+      let message = "Upload failed. Please try again.";
       if (axios.isAxiosError(err)) {
         const detail = err.response?.data?.detail;
-        if (typeof detail === "string" && detail.trim()) {
-          errorMessage = detail;
-        } else if (err.message) {
-          errorMessage = err.message;
-        }
+        if (typeof detail === "string" && detail.trim()) message = detail;
+        else if (err.message) message = err.message;
       } else if (err instanceof Error && err.message) {
-        errorMessage = err.message;
+        message = err.message;
       }
-
-      alert(errorMessage);
+      setError(message);
     }
     setLoading(false);
   }
@@ -83,7 +79,17 @@ export default function UploadForm({ initialEntry }: UploadFormProps) {
 
       <div className="px-4 sm:px-6 lg:px-8 py-12 relative z-10">
         <div className="max-w-7xl mx-auto">
-          {!xrayPrediction && <FileUploader loading={loading} onUpload={handleUpload} />}
+          {!xrayPrediction && (
+            <>
+              <FileUploader loading={loading} onUpload={handleUpload} />
+              {error && (
+                <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <span className="mt-0.5 shrink-0 text-base">⚠</span>
+                  <span>{error}</span>
+                </div>
+              )}
+            </>
+          )}
           {xrayPrediction && (
             <XrayVisualizationView
               prediction={xrayPrediction}

@@ -7,6 +7,7 @@ from app.services.readmission_predictor import (
     encode_patient, predict_readmission,
     explain_shap_readmission, explain_lime_readmission,
 )
+from app.services.llm_summarizer import summarize_readmission
 
 router = APIRouter()
 
@@ -72,7 +73,8 @@ def readmission_predict(patient: PatientReadmission):
     encoded = encode_patient(raw)
     result = predict_readmission(encoded)
     shap_exp = explain_shap_readmission(encoded)
-    return {**result, "shap_explanation": shap_exp}
+    summary = summarize_readmission(result["probability"], result["risk_level"], shap_exp["features"])
+    return {**result, "shap_explanation": shap_exp, "summary": summary}
 
 
 @router.post("/explain-lime")

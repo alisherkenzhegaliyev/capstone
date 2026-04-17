@@ -29,13 +29,40 @@ export function getHistoryEntries(userEmail: string): HistoryEntry[] {
   }
 }
 
+function stripImages(entry: HistoryEntry): HistoryEntry {
+  if (entry.feature !== "xray") return entry;
+  return {
+    ...entry,
+    prediction: {
+      ...entry.prediction,
+      original_image: "",
+      findings: entry.prediction.findings.map((f) => ({
+        ...f,
+        gradcam_image: null,
+        gradcam_plus_image: null,
+      })),
+    },
+  };
+}
+
 export function saveHistoryEntry(userEmail: string, entry: HistoryEntry) {
   if (!canUseStorage()) {
     return;
   }
 
-  const nextEntries = [entry, ...getHistoryEntries(userEmail)].slice(0, MAX_HISTORY_ITEMS);
-  window.localStorage.setItem(getHistoryStorageKey(userEmail), JSON.stringify(nextEntries));
+  const slim = stripImages(entry);
+  const nextEntries = [slim, ...getHistoryEntries(userEmail)].slice(0, MAX_HISTORY_ITEMS);
+  try {
+    window.localStorage.setItem(getHistoryStorageKey(userEmail), JSON.stringify(nextEntries));
+  } catch {
+    // Storage still full after stripping — drop oldest entry and retry once
+    const trimmed = nextEntries.slice(0, -1);
+    try {
+      window.localStorage.setItem(getHistoryStorageKey(userEmail), JSON.stringify(trimmed));
+    } catch {
+      // Give up silently — history is non-critical
+    }
+  }
 }
 
 export function clearHistoryEntries(userEmail: string) {
