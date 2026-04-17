@@ -1,15 +1,34 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:16
+    container_name: capstone-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-capstone}
+      POSTGRES_USER: ${POSTGRES_USER:-capstone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
 
   backend:
     build: ./backend
     container_name: innovatex-backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://capstone:capstone@postgres:5432/capstone}
+      APP_LOGIN_EMAIL: ${APP_LOGIN_EMAIL:-doctor@example.com}
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:-changeme123}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
     ports:
       - "8000:8000"
     volumes:
       # Let annotated images persist and be accessible
       - ./backend/static:/app/static
+    depends_on:
+      - postgres
     restart: unless-stopped
 
   frontend:
@@ -20,3 +39,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  postgres-data:

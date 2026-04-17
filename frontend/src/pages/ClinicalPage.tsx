@@ -4,6 +4,7 @@ import CHDForm from "../components/chd/CHDForm";
 import CHDResults from "../components/chd/CHDResults";
 import ReadmissionForm from "../components/readmission/ReadmissionForm";
 import ReadmissionResults from "../components/readmission/ReadmissionResults";
+import { useAuth } from "../auth/AuthContext";
 import { predictCHD } from "../api/chd";
 import { predictReadmission } from "../api/readmission";
 import type { CHDInput, CHDPrediction } from "../types/chd";
@@ -13,6 +14,7 @@ type Tab = "chd" | "readmission";
 
 export default function ClinicalPage() {
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
   const [tab, setTab] = useState<Tab>("chd");
   const [loading, setLoading] = useState(false);
 
@@ -66,7 +68,15 @@ export default function ClinicalPage() {
               ← Back to Home
             </button>
             <h1 className="text-lg font-bold text-slate-900">Clinical Decision Support</h1>
-            <div className="w-24" />
+            <div className="flex items-center gap-3">
+              <span className="hidden md:block text-xs font-medium text-slate-500">{user?.email}</span>
+              <button
+                onClick={logout}
+                className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
+              >
+                Log out
+              </button>
+            </div>
           </div>
         </div>
       </div>

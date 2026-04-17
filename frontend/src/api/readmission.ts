@@ -1,7 +1,5 @@
-import axios from "axios";
 import type { ReadmissionInput, ReadmissionPrediction, ReadmissionLIMEResult } from "../types/readmission";
-
-const API_BASE = "http://localhost:8000";
+import { apiClient } from "./client";
 
 export async function predictReadmission(data: ReadmissionInput): Promise<ReadmissionPrediction> {
   // Auto-derive 'change' field from medications
@@ -14,7 +12,7 @@ export async function predictReadmission(data: ReadmissionInput): Promise<Readmi
   ];
   const anyChanged = meds.some((m) => m === "Up" || m === "Down");
 
-  const res = await axios.post(`${API_BASE}/readmission/predict`, {
+  const res = await apiClient.post("/readmission/predict", {
     ...data,
     change: anyChanged ? "Ch" : "No",
   });
@@ -31,7 +29,7 @@ export async function explainReadmissionLime(data: ReadmissionInput): Promise<Re
   ];
   const anyChanged = meds.some((m) => m === "Up" || m === "Down");
 
-  const res = await axios.post(`${API_BASE}/readmission/explain-lime`, {
+  const res = await apiClient.post("/readmission/explain-lime", {
     ...data,
     change: anyChanged ? "Ch" : "No",
   });

@@ -1,7 +1,5 @@
 .DS_Store
-frontend/node_modules/
+.pycache/
 backend/__pycache__/
-<<<<<<< HEAD
-=======
 backend/models/
->>>>>>> feature/ml-integration-clean
+frontend/node_modules/
