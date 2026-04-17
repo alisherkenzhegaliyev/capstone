@@ -61,9 +61,10 @@ export interface Finding {
 
 export interface XrayPrediction {
   status: "ABNORMAL" | "NORMAL";
-  findings: Finding[];          // all 14 pathologies, sorted by probability desc
-  original_image: string;       // data:image/png;base64,...
+  findings: Finding[];
+  original_image: string;
   filename: string;
   threshold: number;
   model: string;
+  summary: string | null;
 }

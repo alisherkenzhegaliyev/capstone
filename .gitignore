@@ -3,3 +3,6 @@
 backend/__pycache__/
 backend/models/
 frontend/node_modules/
+.env
+CLAUDE.md
+ISSUES.md
