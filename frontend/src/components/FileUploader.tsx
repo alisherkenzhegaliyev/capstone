@@ -43,12 +43,13 @@ export default function FileUploader({ loading, onUpload }: FileUploaderProps) {
 
       const isImage =
         selectedFile.type.startsWith("image/") ||
-        [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"].some((ext) =>
+        selectedFile.type === "application/dicom" ||
+        [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".dcm"].some((ext) =>
           selectedFile.name.toLowerCase().endsWith(ext)
         );
 
       if (!isImage) {
-        alert("Please upload a chest X-ray image in JPG, PNG, BMP, or TIFF format.");
+        alert("Please upload a chest X-ray image in JPG, PNG, BMP, TIFF, or DICOM (.dcm) format.");
         return;
       }
 
@@ -73,6 +74,7 @@ export default function FileUploader({ loading, onUpload }: FileUploaderProps) {
       "image/png": [".png"],
       "image/bmp": [".bmp"],
       "image/tiff": [".tiff", ".tif"],
+      "application/dicom": [".dcm"],
     },
     onDropRejected: (error) => {
       console.log(error);

@@ -73,3 +73,4 @@ psycopg[binary]==3.2.12
 SQLAlchemy==2.0.44
 groq>=0.9
 python-dotenv>=1.0
+pydicom==3.0.2
