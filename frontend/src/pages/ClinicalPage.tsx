@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import CHDForm from "../components/chd/CHDForm";
 import CHDResults from "../components/chd/CHDResults";
 import ReadmissionForm from "../components/readmission/ReadmissionForm";
@@ -9,22 +9,48 @@ import { predictCHD } from "../api/chd";
 import { predictReadmission } from "../api/readmission";
 import type { CHDInput, CHDPrediction } from "../types/chd";
 import type { ReadmissionInput, ReadmissionPrediction } from "../types/readmission";
+import type { HistoryNavigationState } from "../types/history";
+import { createHistoryId, saveHistoryEntry } from "../lib/history";
 
 type Tab = "chd" | "readmission";
 
 export default function ClinicalPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout, user } = useAuth();
-  const [tab, setTab] = useState<Tab>("chd");
+  const selectedEntry = (location.state as HistoryNavigationState | null)?.selectedEntry;
+  const initialTab: Tab = selectedEntry?.feature === "readmission" ? "readmission" : "chd";
+
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [loading, setLoading] = useState(false);
 
   // CHD state
-  const [chdResult, setChdResult] = useState<CHDPrediction | null>(null);
-  const [chdInput, setChdInput] = useState<CHDInput | null>(null);
+  const [chdResult, setChdResult] = useState<CHDPrediction | null>(
+    selectedEntry?.feature === "chd" ? selectedEntry.result : null
+  );
+  const [chdInput, setChdInput] = useState<CHDInput | null>(
+    selectedEntry?.feature === "chd" ? selectedEntry.input : null
+  );
 
   // Readmission state
-  const [readmResult, setReadmResult] = useState<ReadmissionPrediction | null>(null);
-  const [readmInput, setReadmInput] = useState<ReadmissionInput | null>(null);
+  const [readmResult, setReadmResult] = useState<ReadmissionPrediction | null>(
+    selectedEntry?.feature === "readmission" ? selectedEntry.result : null
+  );
+  const [readmInput, setReadmInput] = useState<ReadmissionInput | null>(
+    selectedEntry?.feature === "readmission" ? selectedEntry.input : null
+  );
+
+  useEffect(() => {
+    if (selectedEntry?.feature === "chd") {
+      setTab("chd");
+      setChdResult(selectedEntry.result);
+      setChdInput(selectedEntry.input);
+    } else if (selectedEntry?.feature === "readmission") {
+      setTab("readmission");
+      setReadmResult(selectedEntry.result);
+      setReadmInput(selectedEntry.input);
+    }
+  }, [selectedEntry]);
 
   const handleCHD = async (data: CHDInput) => {
     setLoading(true);
@@ -32,6 +58,15 @@ export default function ClinicalPage() {
       const result = await predictCHD(data);
       setChdResult(result);
       setChdInput(data);
+      if (user?.email) {
+        saveHistoryEntry(user.email, {
+          id: createHistoryId(),
+          createdAt: new Date().toISOString(),
+          feature: "chd",
+          input: data,
+          result,
+        });
+      }
     } catch (err) {
       console.error(err);
       alert("Prediction failed. Is the backend running?");
@@ -45,6 +80,15 @@ export default function ClinicalPage() {
       const result = await predictReadmission(data);
       setReadmResult(result);
       setReadmInput(data);
+      if (user?.email) {
+        saveHistoryEntry(user.email, {
+          id: createHistoryId(),
+          createdAt: new Date().toISOString(),
+          feature: "readmission",
+          input: data,
+          result,
+        });
+      }
     } catch (err) {
       console.error(err);
       alert("Prediction failed. Is the backend running?");
@@ -69,6 +113,12 @@ export default function ClinicalPage() {
             </button>
             <h1 className="text-lg font-bold text-slate-900">Clinical Decision Support</h1>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate("/history")}
+                className="rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                History
+              </button>
               <span className="hidden md:block text-xs font-medium text-slate-500">{user?.email}</span>
               <button
                 onClick={logout}

@@ -1,22 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import type { XrayPrediction } from "../types/types";
+import type { HistoryEntry } from "../types/history";
 import FileUploader from "./FileUploader";
 import XrayVisualizationView from "./XrayVisualizationView";
 import { predictXray } from "../api/api";
 import { DotScreenShader } from "./DotScreenShader";
+import { useAuth } from "../auth/AuthContext";
+import { createHistoryId, saveHistoryEntry } from "../lib/history";
 
-export default function UploadForm() {
+interface UploadFormProps {
+  initialEntry?: Extract<HistoryEntry, { feature: "xray" }>;
+}
+
+export default function UploadForm({ initialEntry }: UploadFormProps) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [xrayPrediction, setXrayPrediction] = useState<XrayPrediction | null>(null);
+  const [xrayPrediction, setXrayPrediction] = useState<XrayPrediction | null>(initialEntry?.prediction ?? null);
+
+  useEffect(() => {
+    setXrayPrediction(initialEntry?.prediction ?? null);
+  }, [initialEntry]);
 
   async function handleUpload(file: File) {
     setLoading(true);
     try {
       const prediction = await predictXray(file);
       setXrayPrediction(prediction);
+      if (user?.email) {
+        saveHistoryEntry(user.email, {
+          id: createHistoryId(),
+          createdAt: new Date().toISOString(),
+          feature: "xray",
+          prediction,
+        });
+      }
     } catch (err) {
       console.error(err);
 
