@@ -40,19 +40,18 @@ export default function FileUploader({ loading, onUpload }: FileUploaderProps) {
   const handleFileChange = (newFiles: File[]) => {
     if (newFiles.length > 0) {
       const selectedFile = newFiles[0];
-      
-      // Validate file type before setting state
-      const isPdf = selectedFile.type === "application/pdf" || selectedFile.name.endsWith(".pdf");
-      const isZip = selectedFile.type === "application/zip" || selectedFile.name.endsWith(".zip");
-      const isImage = selectedFile.type.startsWith("image/") || 
-                      [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"].some(ext => 
-                        selectedFile.name.toLowerCase().endsWith(ext));
-      
-      if (!isPdf && !isZip && !isImage) {
-        alert("Please upload a PDF, ZIP archive, or chest X-ray image (JPG/PNG).");
+
+      const isImage =
+        selectedFile.type.startsWith("image/") ||
+        [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"].some((ext) =>
+          selectedFile.name.toLowerCase().endsWith(ext)
+        );
+
+      if (!isImage) {
+        alert("Please upload a chest X-ray image in JPG, PNG, BMP, or TIFF format.");
         return;
       }
-      
+
       setFile(selectedFile);
       onUpload(selectedFile);
     }
@@ -70,9 +69,6 @@ export default function FileUploader({ loading, onUpload }: FileUploaderProps) {
     disabled: loading,
     onDrop: handleFileChange,
     accept: {
-      "application/pdf": [".pdf"],
-      "application/zip": [".zip"],
-      "application/x-zip-compressed": [".zip"],
       "image/jpeg": [".jpg", ".jpeg"],
       "image/png": [".png"],
       "image/bmp": [".bmp"],
@@ -87,10 +83,10 @@ export default function FileUploader({ loading, onUpload }: FileUploaderProps) {
     <div className="w-full min-h-[60vh] flex flex-col items-center justify-center">
       <div className="text-center mb-8">
         <h2 className="text-4xl font-black mb-3 text-slate-900">
-          Upload Your Document or X-ray
+          Upload Chest X-ray
         </h2>
         <p className="text-slate-500 text-lg">
-          Drag and drop or click to select a PDF, ZIP, or chest X-ray image
+          Drag and drop or click to select a chest X-ray image
         </p>
       </div>
 
@@ -125,7 +121,7 @@ export default function FileUploader({ loading, onUpload }: FileUploaderProps) {
                   Upload file
                 </p>
                 <p className="font-sans font-normal text-slate-400 text-base mt-2">
-                  Drag or drop your PDF, ZIP, or X-ray image here or click to upload
+                  Drag or drop your X-ray image here or click to upload
                 </p>
 
                 <div className="relative w-full mt-10 max-w-xl mx-auto">

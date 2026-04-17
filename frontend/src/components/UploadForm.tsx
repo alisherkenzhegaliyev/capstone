@@ -1,63 +1,50 @@
 "use client";
 
 import { useState } from "react";
-import type { AnalyzeResponse, BatchAnalyzeResponse, XrayPrediction } from "../types/types";
+import axios from "axios";
+import type { XrayPrediction } from "../types/types";
 import FileUploader from "./FileUploader";
-import ResultsView from "./ResultsView";
-import BatchResultsView from "./BatchResultsView";
 import XrayVisualizationView from "./XrayVisualizationView";
-import { analyzePdf, analyzeBatch, predictXray } from "../api/api";
+import { predictXray } from "../api/api";
 import { DotScreenShader } from "./DotScreenShader";
 
 export default function UploadForm() {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AnalyzeResponse | null>(null);
-  const [batchResult, setBatchResult] = useState<BatchAnalyzeResponse | null>(
-    null
-  );
   const [xrayPrediction, setXrayPrediction] = useState<XrayPrediction | null>(null);
 
   async function handleUpload(file: File) {
     setLoading(true);
     try {
-      const isZip = file.type === "application/zip" || file.name.endsWith(".zip");
-      const isImage = file.type.startsWith("image/") || 
-                      [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"].some(ext => 
-                        file.name.toLowerCase().endsWith(ext));
-
-      if (isImage) {
-        // Single call — predict returns prediction + all three images as base64
-        const prediction = await predictXray(file);
-        setXrayPrediction(prediction);
-        setResult(null);
-        setBatchResult(null);
-      } else if (isZip) {
-        const data = await analyzeBatch(file);
-        setBatchResult(data);
-        setResult(null);
-        setXrayPrediction(null);
-      } else {
-        const data = await analyzePdf(file);
-        setResult(data);
-        setBatchResult(null);
-        setXrayPrediction(null);
-      }
+      const prediction = await predictXray(file);
+      setXrayPrediction(prediction);
     } catch (err) {
       console.error(err);
-      alert("Upload failed. Please try again.");
+
+      let errorMessage = "Upload failed. Please try again.";
+
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === "string" && detail.trim()) {
+          errorMessage = detail;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+      } else if (err instanceof Error && err.message) {
+        errorMessage = err.message;
+      }
+
+      alert(errorMessage);
     }
     setLoading(false);
   }
 
   function handleReset() {
-    setResult(null);
-    setBatchResult(null);
     setXrayPrediction(null);
   }
 
   return (
     <div className="min-h-screen bg-white text-slate-900 relative">
-      {!result && !batchResult && !xrayPrediction && (
+      {!xrayPrediction && (
         <>
           <div className="absolute inset-0 w-full h-full pointer-events-none z-0">
             <DotScreenShader
@@ -76,13 +63,7 @@ export default function UploadForm() {
 
       <div className="px-4 sm:px-6 lg:px-8 py-12 relative z-10">
         <div className="max-w-7xl mx-auto">
-          {!result && !batchResult && !xrayPrediction && (
-            <FileUploader loading={loading} onUpload={handleUpload} />
-          )}
-          {result && <ResultsView result={result} onReset={handleReset} />}
-          {batchResult && (
-            <BatchResultsView result={batchResult} onReset={handleReset} />
-          )}
+          {!xrayPrediction && <FileUploader loading={loading} onUpload={handleUpload} />}
           {xrayPrediction && (
             <XrayVisualizationView
               prediction={xrayPrediction}

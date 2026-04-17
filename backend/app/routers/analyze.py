@@ -91,7 +91,9 @@ def _build_model() -> nn.Module:
     Build DenseNet-121 with a 14-class head matching the arnoweng/CheXNet
     checkpoint format.
     """
-    model = torchvision.models.densenet121(weights="IMAGENET1K_V1")
+    # Avoid network downloads at startup; use the local CheXNet checkpoint when
+    # available and otherwise keep the randomly initialized backbone.
+    model = torchvision.models.densenet121(weights=None)
     num_features = model.classifier.in_features  # 1024
     model.classifier = nn.Linear(num_features, N_CLASSES)
 
