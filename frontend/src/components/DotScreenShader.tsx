@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect } from "react";
+import { memo, useEffect, useMemo } from "react";
 import {
   Canvas,
   type ThreeEvent,
@@ -142,6 +142,12 @@ function Scene({
   }, []);
 
   useEffect(() => {
+    return () => {
+      dotMaterial.dispose();
+    };
+  }, [dotMaterial]);
+
+  useEffect(() => {
     dotMaterial.uniforms.dotColor.value.setHex(
       Number(dotColor.replace("#", "0x"))
     );
@@ -179,19 +185,24 @@ function Scene({
   );
 }
 
-export const DotScreenShader = (props: DotScreenShaderProps) => {
+export const DotScreenShader = memo(function DotScreenShader(
+  props: DotScreenShaderProps
+) {
+  const gl = useMemo(
+    () => ({
+      antialias: true,
+      powerPreference: "high-performance" as const,
+      outputColorSpace: THREE.SRGBColorSpace,
+      toneMapping: THREE.NoToneMapping,
+    }),
+    []
+  );
+
   return (
     <div className="absolute inset-0 w-full h-full pointer-events-none">
-      <Canvas
-        gl={{
-          antialias: true,
-          powerPreference: "high-performance",
-          outputColorSpace: THREE.SRGBColorSpace,
-          toneMapping: THREE.NoToneMapping,
-        }}
-      >
+      <Canvas gl={gl}>
         <Scene {...props} />
       </Canvas>
     </div>
   );
-};
+});
