@@ -54,6 +54,8 @@ export interface Finding {
   class_index: number;
   class_name: string;
   probability: number;
+  threshold: number;
+  detected: boolean;
   has_heatmaps: boolean;
   gradcam_image: string | null;
   gradcam_plus_image: string | null;
