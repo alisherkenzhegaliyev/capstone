@@ -6,11 +6,14 @@ LLM-powered image validation and plain-English summaries using Groq.
 All functions return None/True gracefully when GROQ_API_KEY is absent so the
 prediction endpoints still work without the summarizer configured.
 """
+import base64
 import logging
+from io import BytesIO
 
 from groq import Groq
+from PIL import Image
 
-from app.settings import GROQ_API_KEY, GROQ_TEXT_MODEL
+from app.settings import GROQ_API_KEY, GROQ_TEXT_MODEL, GROQ_VISION_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,51 @@ _SUMMARY_SYSTEM = (
     "Write 3-4 sentences. No bullet points. "
     "Do not recommend treatments. End with one sentence noting this is a screening tool, not a diagnosis."
 )
+
+
+def classify_medical_image(pil_img: Image.Image) -> bool:
+    """
+    Returns True if the image is a chest X-ray or medical scan, False otherwise.
+    Falls back to True (allow through) when Groq is unavailable so the heuristic
+    in the caller can still gate the request.
+    """
+    client = _get_client()
+    if client is None:
+        return True  # no Groq key — defer to caller's heuristic
+
+    try:
+        # Resize to 512px wide to keep the payload small
+        img = pil_img.copy().convert("RGB")
+        img.thumbnail((512, 512))
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=75)
+        b64 = base64.b64encode(buf.getvalue()).decode()
+
+        response = client.chat.completions.create(
+            model=GROQ_VISION_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "Is this image a chest X-ray or other medical radiological scan "
+                            "(e.g. CT, MRI, X-ray)? Answer with a single word: yes or no."
+                        ),
+                    },
+                ],
+            }],
+            max_tokens=5,
+        )
+        answer = response.choices[0].message.content.strip().lower()
+        return answer.startswith("yes")
+    except Exception as exc:
+        logger.warning("Vision classifier failed: %s — allowing image through", exc)
+        return True  # fail open: let heuristic decide
 
 
 def _get_client() -> Groq | None:

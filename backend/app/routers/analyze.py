@@ -50,7 +50,7 @@ from app.auth import get_current_user
 from app.db import get_db
 from app.models import Prediction, User
 from app.redis_client import get_redis
-from app.services.llm_summarizer import summarize_xray
+from app.services.llm_summarizer import classify_medical_image, summarize_xray
 
 from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
 from pytorch_grad_cam.utils.image import show_cam_on_image
@@ -308,7 +308,15 @@ async def predict(
         raise HTTPException(status_code=400, detail=f"Could not read image: {exc}")
 
     # --- Gate: reject non-medical images before running CheXNet ---
+    # Fast heuristic first: color photos are rejected immediately without an API call.
+    # If the image passes the heuristic (grayscale), confirm with the vision LLM.
     if not _is_grayscale_image(original_pil):
+        raise HTTPException(
+            status_code=422,
+            detail="Please upload a chest X-ray. The submitted image does not appear to be a radiological scan.",
+        )
+    is_medical = await asyncio.to_thread(classify_medical_image, original_pil)
+    if not is_medical:
         raise HTTPException(
             status_code=422,
             detail="Please upload a chest X-ray. The submitted image does not appear to be a radiological scan.",
