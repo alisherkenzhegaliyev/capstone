@@ -111,11 +111,11 @@ CONFIDENCE_THRESHOLD = 0.5
 
 # Extra margin above threshold required to trigger ABNORMAL status (cuts borderline FPs).
 # Weaker trigger classes (lower AUC) get a larger margin to reduce their FP contribution.
-ABNORMAL_CONFIDENCE_MARGIN_DEFAULT = 0.15
+ABNORMAL_CONFIDENCE_MARGIN_DEFAULT = 0.11
 ABNORMAL_CONFIDENCE_MARGINS = {
-    "Atelectasis":   0.20,  # AUC 0.791
-    "Nodule":        0.20,  # AUC 0.764
-    "Consolidation": 0.20,  # AUC 0.778
+    "Atelectasis":   0.14,  # AUC 0.791
+    "Nodule":        0.14,  # AUC 0.764
+    "Consolidation": 0.14,  # AUC 0.778
 }
 
 # Maximum number of findings to pre-compute Grad-CAM heatmaps for
