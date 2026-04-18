@@ -54,6 +54,8 @@ export interface Finding {
   class_index: number;
   class_name: string;
   probability: number;
+  threshold: number;
+  detected: boolean;
   has_heatmaps: boolean;
   gradcam_image: string | null;
   gradcam_plus_image: string | null;
@@ -64,7 +66,8 @@ export interface XrayPrediction {
   findings: Finding[];
   original_image: string;
   filename: string;
-  threshold: number;
+  threshold?: number;
   model: string;
   summary: string | null;
+  prediction_id?: string;
 }

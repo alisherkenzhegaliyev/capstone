@@ -102,8 +102,8 @@ def summarize_xray(
     findings: list[dict],
     threshold: float,
 ) -> str | None:
-    detected = [f for f in findings if f["probability"] >= threshold]
-    below = [f for f in findings if threshold > f["probability"] >= 0.05]
+    detected = [f for f in findings if f.get("detected", False)]
+    below = [f for f in findings if not f.get("detected", False) and f["probability"] >= 0.1]
 
     detected_text = ", ".join(
         f"{f['class_name']} ({f['probability']:.1%})" for f in detected
@@ -113,10 +113,11 @@ def summarize_xray(
     ) or "none"
 
     return _summarize(
-        f"CheXNet DenseNet-121 chest X-ray analysis. Status: {status}. "
-        f"Threshold: {threshold:.0%}.\n"
-        f"Flagged findings: {detected_text}.\n"
+        f"CheXNet DenseNet-121 chest X-ray analysis. Overall status: {status}.\n"
+        f"Findings above per-class confidence threshold: {detected_text}.\n"
         f"Notable sub-threshold findings: {below_text}.\n"
-        f"Write a radiology-style interpretation: discuss the flagged findings' confidence levels, "
-        f"whether their co-occurrence is clinically meaningful, and any sub-threshold findings worth monitoring."
+        f"The overall status is {status}. If NORMAL, do not alarm the reader — summarise calmly. "
+        f"If ABNORMAL, discuss the detected findings' confidence levels and clinical significance. "
+        f"Mention any sub-threshold findings worth monitoring. "
+        f"Write 3-4 sentences in a radiology-style tone. End with one sentence noting this is a screening tool."
     )

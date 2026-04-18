@@ -10,7 +10,7 @@ import { predictReadmission } from "../api/readmission";
 import type { CHDInput, CHDPrediction } from "../types/chd";
 import type { ReadmissionInput, ReadmissionPrediction } from "../types/readmission";
 import type { HistoryNavigationState } from "../types/history";
-import { createHistoryId, saveHistoryEntry } from "../lib/history";
+import { saveHistoryEntry } from "../lib/history";
 
 type Tab = "chd" | "readmission";
 
@@ -60,7 +60,7 @@ export default function ClinicalPage() {
       setChdInput(data);
       if (user?.email) {
         saveHistoryEntry(user.email, {
-          id: createHistoryId(),
+          id: result.prediction_id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           createdAt: new Date().toISOString(),
           feature: "chd",
           input: data,
@@ -82,7 +82,7 @@ export default function ClinicalPage() {
       setReadmInput(data);
       if (user?.email) {
         saveHistoryEntry(user.email, {
-          id: createHistoryId(),
+          id: result.prediction_id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           createdAt: new Date().toISOString(),
           feature: "readmission",
           input: data,

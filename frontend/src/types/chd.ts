@@ -38,6 +38,7 @@ export interface CHDPrediction {
   risk_level: "High" | "Low";
   shap_explanation: SHAPExplanation;
   summary: string | null;
+  prediction_id?: string;
 }
 
 export interface CHDLIMEResult {

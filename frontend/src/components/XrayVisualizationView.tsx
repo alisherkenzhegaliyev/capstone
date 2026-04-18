@@ -23,9 +23,7 @@ export default function XrayVisualizationView({
   const [selectedIdx, setSelectedIdx] = useState(0);
   const isAbnormal = prediction.status === "ABNORMAL";
   const selected: Finding = prediction.findings[selectedIdx];
-  const flaggedCount = prediction.findings.filter(
-    (f) => f.probability >= prediction.threshold
-  ).length;
+  const detectedCount = prediction.findings.filter((f) => f.detected).length;
 
   const handleDownload = () => {
     if (!selected.gradcam_plus_image) return;
@@ -100,8 +98,10 @@ export default function XrayVisualizationView({
           </h3>
           <p className="text-sm text-slate-600 mt-0.5">
             {isAbnormal
-              ? `${flaggedCount} finding${flaggedCount > 1 ? "s" : ""} above ${(prediction.threshold * 100).toFixed(0)}% confidence threshold`
-              : `No findings above ${(prediction.threshold * 100).toFixed(0)}% confidence threshold`}
+              ? `${detectedCount} finding${detectedCount !== 1 ? "s" : ""} above confidence threshold`
+              : detectedCount > 0
+                ? `${detectedCount} sub-threshold finding${detectedCount !== 1 ? "s" : ""} detected — did not meet abnormal criteria`
+                : "No significant findings detected"}
           </p>
         </div>
       </motion.div>
@@ -135,14 +135,10 @@ export default function XrayVisualizationView({
           </div>
           <div className="divide-y divide-slate-50 max-h-[520px] overflow-y-auto">
             {prediction.findings.map((finding, idx) => {
-              const isFlagged = finding.probability >= prediction.threshold;
+              const isFlagged = finding.detected;
               const isSelected = idx === selectedIdx;
 
-              // Show separator before first below-threshold finding
-              const prevFlagged =
-                idx > 0 &&
-                prediction.findings[idx - 1].probability >=
-                  prediction.threshold;
+              const prevFlagged = idx > 0 && prediction.findings[idx - 1].detected;
               const showSep = !isFlagged && prevFlagged;
 
               return (
@@ -244,8 +240,9 @@ export default function XrayVisualizationView({
                     >
                       <ImageOff className="w-10 h-10" />
                       <p className="text-xs text-center px-4">
-                        Heatmap not available — finding below confidence
-                        threshold
+                        {selected.has_heatmaps
+                          ? "Heatmap not stored in history — re-upload to view"
+                          : "Heatmap not available — finding below confidence threshold"}
                       </p>
                     </motion.div>
                   )}
@@ -284,8 +281,9 @@ export default function XrayVisualizationView({
                     >
                       <ImageOff className="w-10 h-10" />
                       <p className="text-xs text-center px-4">
-                        Heatmap not available — finding below confidence
-                        threshold
+                        {selected.has_heatmaps
+                          ? "Heatmap not stored in history — re-upload to view"
+                          : "Heatmap not available — finding below confidence threshold"}
                       </p>
                     </motion.div>
                   )}
@@ -339,8 +337,7 @@ export default function XrayVisualizationView({
         </div>
         <p className="mt-4 text-xs text-slate-400">
           This tool is for research purposes only and is not a substitute for
-          clinical diagnosis. Confidence threshold set at{" "}
-          {(prediction.threshold * 100).toFixed(0)}%.
+          clinical diagnosis. Per-class confidence thresholds tuned on NIH ChestX-ray14.
         </p>
       </motion.div>
     </motion.div>

@@ -1,8 +1,17 @@
 """
 Case 2: Hospital Readmission Risk Prediction API endpoints.
 """
-from fastapi import APIRouter
-from pydantic import BaseModel
+import json
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_user
+from app.db import get_db
+from app.models import Prediction, User
 from app.services.readmission_predictor import (
     encode_patient, predict_readmission,
     explain_shap_readmission, explain_lime_readmission,
@@ -16,18 +25,18 @@ class PatientReadmission(BaseModel):
     age_bracket: str = '[50-60]'
     gender: str = 'Male'
     race: str = 'Unknown'
-    admission_type_id: int = 1
-    discharge_disposition_id: int = 1
-    admission_source_id: int = 7
+    admission_type_id: int = Field(1, ge=1, le=8)
+    discharge_disposition_id: int = Field(1, ge=1, le=30)
+    admission_source_id: int = Field(7, ge=1, le=26)
     medical_specialty: str = 'Unknown'
-    time_in_hospital: int = 3
-    num_lab_procedures: int = 40
-    num_procedures: int = 1
-    num_medications: int = 15
-    number_diagnoses: int = 7
-    number_outpatient: int = 0
-    number_emergency: int = 0
-    number_inpatient: int = 0
+    time_in_hospital: int = Field(3, ge=1, le=14)
+    num_lab_procedures: int = Field(40, ge=0, le=132)
+    num_procedures: int = Field(1, ge=0, le=6)
+    num_medications: int = Field(15, ge=0, le=81)
+    number_diagnoses: int = Field(7, ge=1, le=16)
+    number_outpatient: int = Field(0, ge=0, le=42)
+    number_emergency: int = Field(0, ge=0, le=76)
+    number_inpatient: int = Field(0, ge=0, le=21)
     max_glu_serum: str = 'None'
     A1Cresult: str = 'None'
     change: str = 'No'
@@ -58,7 +67,6 @@ class PatientReadmission(BaseModel):
 def _to_raw(patient: PatientReadmission) -> dict:
     """Convert Pydantic model to raw dict with hyphenated medication keys."""
     raw = patient.model_dump()
-    # Fix hyphenated keys
     raw['glyburide-metformin'] = raw.pop('glyburide_metformin')
     raw['glipizide-metformin'] = raw.pop('glipizide_metformin')
     raw['glimepiride-pioglitazone'] = raw.pop('glimepiride_pioglitazone')
@@ -68,13 +76,39 @@ def _to_raw(patient: PatientReadmission) -> dict:
 
 
 @router.post("/predict")
-def readmission_predict(patient: PatientReadmission):
+def readmission_predict(
+    patient: PatientReadmission,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     raw = _to_raw(patient)
     encoded = encode_patient(raw)
     result = predict_readmission(encoded)
     shap_exp = explain_shap_readmission(encoded)
     summary = summarize_readmission(result["probability"], result["risk_level"], shap_exp["features"])
-    return {**result, "shap_explanation": shap_exp, "summary": summary}
+    prediction_result = {**result, "shap_explanation": shap_exp, "summary": summary}
+
+    prediction_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+
+    entry = {
+        "id": prediction_id,
+        "createdAt": now.isoformat(),
+        "feature": "readmission",
+        "input": patient.model_dump(),
+        "result": prediction_result,
+    }
+
+    db.add(Prediction(
+        id=prediction_id,
+        user_id=current_user.id,
+        feature="readmission",
+        entry_json=json.dumps(entry),
+        created_at=now,
+    ))
+    db.commit()
+
+    return {**prediction_result, "prediction_id": prediction_id}
 
 
 @router.post("/explain-lime")
