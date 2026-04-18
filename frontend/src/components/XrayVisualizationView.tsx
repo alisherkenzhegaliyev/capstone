@@ -106,6 +106,19 @@ export default function XrayVisualizationView({
         </div>
       </motion.div>
 
+      {/* LLM summary */}
+      {prediction.summary && (
+        <motion.div
+          initial={{ y: -5, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.15 }}
+          className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6"
+        >
+          <h3 className="text-sm font-semibold text-blue-700 uppercase tracking-wide mb-2">AI Summary</h3>
+          <p className="text-sm text-slate-700 leading-relaxed">{prediction.summary}</p>
+        </motion.div>
+      )}
+
       {/* Main content: Findings List + Image Panel */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}

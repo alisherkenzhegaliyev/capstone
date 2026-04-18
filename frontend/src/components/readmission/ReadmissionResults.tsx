@@ -76,6 +76,14 @@ export default function ReadmissionResults({ result, patientData, onReset }: Rea
         thresholds={{ low: 0.102, medium: 0.3, high: 1 }}
       />
 
+      {/* LLM summary */}
+      {result.summary && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-blue-700 uppercase tracking-wide mb-2">AI Summary</h3>
+          <p className="text-sm text-slate-700 leading-relaxed">{result.summary}</p>
+        </div>
+      )}
+
       {/* Patient summary cards */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Patient Data Summary</h3>

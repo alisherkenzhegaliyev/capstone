@@ -22,6 +22,7 @@ Endpoints:
   POST /predict   - returns status + 14 ranked findings + per-finding heatmaps + original image
 """
 
+import asyncio
 import base64
 import logging
 from io import BytesIO
@@ -40,6 +41,8 @@ import torchvision
 import torchvision.transforms as T
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from PIL import Image
+
+from app.services.llm_summarizer import summarize_xray
 
 from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
 from pytorch_grad_cam.utils.image import show_cam_on_image
@@ -165,6 +168,25 @@ _normalise = T.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
 _to_tensor = T.ToTensor()
 
 
+def _is_grayscale_image(img: Image.Image) -> bool:
+    """
+    X-rays are true grayscale: per-pixel HSV saturation is near zero everywhere.
+    Regular photos have saturation in at least a significant portion of pixels
+    (skin tones, clothing, backgrounds).
+
+    Uses the 75th-percentile saturation so even a minority of colourful pixels
+    (e.g. a neutral cap but visible skin) triggers rejection.
+    Threshold: 8% saturation at p75 — well above X-ray noise (~1-3%) but
+    below any real photograph (~15-50%).
+    """
+    arr = np.array(img.convert("RGB"), dtype=np.float32) / 255.0
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    max_c = np.maximum(np.maximum(r, g), b)
+    min_c = np.minimum(np.minimum(r, g), b)
+    saturation = np.where(max_c > 1e-6, (max_c - min_c) / max_c, 0.0)
+    return float(np.percentile(saturation, 75)) < 0.08
+
+
 def preprocess(pil_img: Image.Image):
     """
     Resize to 224x224, convert to RGB, return:
@@ -238,6 +260,13 @@ async def predict(file: UploadFile = File(...)):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not read image: {exc}")
 
+    # --- Gate: reject non-medical images before running CheXNet ---
+    if not _is_grayscale_image(original_pil):
+        raise HTTPException(
+            status_code=422,
+            detail="Please upload a chest X-ray. The submitted image does not appear to be a radiological scan.",
+        )
+
     try:
         # --- Preprocess ---
         img_tensor, img_rgb_norm = preprocess(original_pil)
@@ -297,6 +326,10 @@ async def predict(file: UploadFile = File(...)):
 
         original_display = (img_rgb_norm * 255).astype(np.uint8)
 
+        summary = await asyncio.to_thread(
+            summarize_xray, status, findings, CONFIDENCE_THRESHOLD
+        )
+
         return {
             "status": status,
             "findings": findings,
@@ -304,6 +337,7 @@ async def predict(file: UploadFile = File(...)):
             "filename": file.filename,
             "thresholds": "per-class (Youden-optimised on NIH ChestX-ray14)",
             "model": "CheXNet (DenseNet-121)",
+            "summary": summary,
         }
 
     except Exception as exc:

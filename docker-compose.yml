@@ -22,6 +22,9 @@ services:
       APP_LOGIN_EMAIL: ${APP_LOGIN_EMAIL:-dr.maya.kim@northstar-clinic.test}
       APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:-NorthstarDemo!2026}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_VISION_MODEL: ${GROQ_VISION_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
+      GROQ_TEXT_MODEL: ${GROQ_TEXT_MODEL:-llama-3.1-8b-instant}
     ports:
       - "8000:8000"
     volumes:

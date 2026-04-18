@@ -63,6 +63,7 @@ export interface ReadmissionPrediction {
   prediction: number;
   risk_level: "High" | "Medium" | "Low";
   shap_explanation: SHAPExplanation;
+  summary: string | null;
 }
 
 export interface ReadmissionLIMEResult {
