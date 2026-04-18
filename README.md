@@ -121,6 +121,22 @@ Notes:
 - If startup fails with a PostgreSQL connection error, make sure Postgres is actually running and reachable on `localhost:5432`.
 - If startup says port `8000` is already in use, another backend instance is already running.
 
+### 4.1 Backend tests
+
+The automated backend suite uses an isolated SQLite test database and stubs the heavy ML/LLM services so API behavior can be tested without external infrastructure or model inference.
+
+Run it with:
+
+```bash
+./backend/.venv/bin/python -m unittest discover -s backend/tests -t . -v
+```
+
+Or from inside `backend/`:
+
+```bash
+./.venv/bin/python -m pytest
+```
+
 ### 5. Manual frontend
 
 ```bash

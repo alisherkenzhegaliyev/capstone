@@ -74,3 +74,4 @@ SQLAlchemy==2.0.44
 groq>=0.9
 python-dotenv>=1.0
 pydicom==3.0.2
+pytest==8.4.2
