@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -25,18 +25,18 @@ class PatientReadmission(BaseModel):
     age_bracket: str = '[50-60]'
     gender: str = 'Male'
     race: str = 'Unknown'
-    admission_type_id: int = 1
-    discharge_disposition_id: int = 1
-    admission_source_id: int = 7
+    admission_type_id: int = Field(1, ge=1, le=8)
+    discharge_disposition_id: int = Field(1, ge=1, le=30)
+    admission_source_id: int = Field(7, ge=1, le=26)
     medical_specialty: str = 'Unknown'
-    time_in_hospital: int = 3
-    num_lab_procedures: int = 40
-    num_procedures: int = 1
-    num_medications: int = 15
-    number_diagnoses: int = 7
-    number_outpatient: int = 0
-    number_emergency: int = 0
-    number_inpatient: int = 0
+    time_in_hospital: int = Field(3, ge=1, le=14)
+    num_lab_procedures: int = Field(40, ge=0, le=132)
+    num_procedures: int = Field(1, ge=0, le=6)
+    num_medications: int = Field(15, ge=0, le=81)
+    number_diagnoses: int = Field(7, ge=1, le=16)
+    number_outpatient: int = Field(0, ge=0, le=42)
+    number_emergency: int = Field(0, ge=0, le=76)
+    number_inpatient: int = Field(0, ge=0, le=21)
     max_glu_serum: str = 'None'
     A1Cresult: str = 'None'
     change: str = 'No'

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -19,19 +19,19 @@ router = APIRouter()
 
 
 class PatientCHD(BaseModel):
-    age: float
-    sex: int
-    total_cholesterol: float
-    systolic_bp: float
-    smoking: int
-    diabetes: int
-    bmi: float
-    heart_rate: float
-    glucose: float
-    bp_meds: int
-    prevalent_hypertension: int
-    cigs_per_day: float = 0.0
-    pulse_pressure: float = 0.0
+    age: float = Field(..., ge=20, le=120)
+    sex: int = Field(..., ge=0, le=1)
+    total_cholesterol: float = Field(..., ge=100, le=700)
+    systolic_bp: float = Field(..., ge=70, le=300)
+    smoking: int = Field(..., ge=0, le=1)
+    diabetes: int = Field(..., ge=0, le=1)
+    bmi: float = Field(..., ge=10, le=70)
+    heart_rate: float = Field(..., ge=30, le=250)
+    glucose: float = Field(..., ge=40, le=600)
+    bp_meds: int = Field(..., ge=0, le=1)
+    prevalent_hypertension: int = Field(..., ge=0, le=1)
+    cigs_per_day: float = Field(0.0, ge=0, le=100)
+    pulse_pressure: float = Field(0.0, ge=0, le=200)
 
 
 @router.post("/predict")
