@@ -161,6 +161,8 @@ def _build_model() -> nn.Module:
     return model
 
 
+WEIGHTS_LOADED = WEIGHTS_PATH.exists()
+
 print("Loading CheXNet model (DenseNet-121)...")
 try:
     model = _build_model()
@@ -238,6 +240,11 @@ async def predict(
     """
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded — check server logs.")
+    if not WEIGHTS_LOADED:
+        raise HTTPException(
+            status_code=503,
+            detail="CheXNet weights are missing. Download model.pth.tar from https://github.com/arnoweng/CheXNet and place it at backend/models/chexnet.pth.tar.",
+        )
 
     # --- Validate file type ---
     ext = Path(file.filename).suffix.lower()
