@@ -5,7 +5,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { fetchCurrentUser, login as loginRequest, type AuthUser } from "../api/auth";
+import {
+  fetchCurrentUser,
+  login as loginRequest,
+  signUp as signUpRequest,
+  verifyEmail as verifyEmailRequest,
+  type AuthUser,
+} from "../api/auth";
 import { clearStoredToken, getStoredToken, setStoredToken } from "../lib/auth";
 
 
@@ -14,6 +20,8 @@ type AuthContextValue = {
   isLoading: boolean;
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<{ email: string; message: string }>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -47,6 +55,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   };
 
+  const signUp = async (email: string, password: string) => {
+    return signUpRequest(email, password);
+  };
+
+  const verifyEmail = async (email: string, code: string) => {
+    const response = await verifyEmailRequest(email, code);
+    setStoredToken(response.access_token);
+    setUser(response.user);
+  };
+
   const logout = () => {
     clearStoredToken();
     setUser(null);
@@ -59,6 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         user,
         login,
+        signUp,
+        verifyEmail,
         logout,
       }}
     >

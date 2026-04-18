@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import get_current_user, seed_default_user
+from app.auth import ensure_auth_schema, get_current_user, seed_default_user
 from app.db import Base, SessionLocal, engine
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -68,6 +68,7 @@ async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        ensure_auth_schema(db)
         seed_default_user(db)
     finally:
         db.close()

@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
+from sqlalchemy import inspect, text
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -21,6 +22,11 @@ from app.settings import (
 
 
 security = HTTPBearer(auto_error=False)
+
+
+def generate_verification_code(now: datetime | None = None) -> str:
+    current = now.astimezone() if now else datetime.now().astimezone()
+    return current.strftime("%d%m%y")
 
 
 def hash_password(password: str, salt: bytes | None = None) -> str:
@@ -58,6 +64,11 @@ def authenticate_user(db: Session, email: str, password: str) -> User | None:
         return None
     if not verify_password(password, user.password_hash):
         return None
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address is not verified.",
+        )
     return user
 
 
@@ -102,8 +113,40 @@ def seed_default_user(db: Session) -> None:
     hashed_password = hash_password(APP_LOGIN_PASSWORD)
 
     if existing is None:
-        db.add(User(email=email, password_hash=hashed_password))
+        db.add(
+            User(
+                email=email,
+                password_hash=hashed_password,
+                is_verified=True,
+                verification_code=generate_verification_code(),
+            )
+        )
     else:
         existing.password_hash = hashed_password
+        existing.is_verified = True
+        existing.verification_code = generate_verification_code()
 
+    db.commit()
+
+
+def ensure_auth_schema(db: Session) -> None:
+    inspector = inspect(db.bind)
+    columns = {column["name"] for column in inspector.get_columns("users")}
+
+    if "is_verified" not in columns:
+        db.execute(
+            text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN NOT NULL DEFAULT FALSE")
+        )
+
+    if "verification_code" not in columns:
+        db.execute(
+            text("ALTER TABLE users ADD COLUMN verification_code VARCHAR(6) NOT NULL DEFAULT ''")
+        )
+
+    db.execute(
+        text(
+            "UPDATE users SET verification_code = :code WHERE verification_code IS NULL OR verification_code = ''"
+        ),
+        {"code": generate_verification_code()},
+    )
     db.commit()
