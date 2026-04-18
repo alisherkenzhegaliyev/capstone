@@ -1,15 +1,28 @@
 # Capstone
 
-FastAPI + React application for explainable clinical decision support. The app now uses PostgreSQL for authentication and exposes a single seeded email/password login for access to the prediction flows.
+FastAPI + React application for explainable clinical decision support. The app uses PostgreSQL for authentication and supports email/password sign-up, sign-in, and a mock 6-digit email verification step.
 
-## Login
+## Authentication
 
-There is no signup flow. One account is created from environment variables on backend startup:
+The frontend includes:
+
+- Sign up with email and password
+- Sign in with an existing verified account
+- Email verification via a 6-digit code entry screen
+
+For local development, no real email is sent. The backend accepts a deterministic 6-digit verification code based on the current date in `DDMMYY` format.
+
+Examples:
+
+- April 18, 2026 -> `180426`
+- January 5, 2027 -> `050127`
+
+The backend also seeds one verified account from environment variables on startup:
 
 - `APP_LOGIN_EMAIL`
 - `APP_LOGIN_PASSWORD`
 
-If the user already exists, startup updates that account's password hash to match the current environment value.
+If that seeded user already exists, startup updates its password hash to match the current environment value.
 
 ## Local Setup
 
@@ -58,6 +71,11 @@ Default login credentials from `docker-compose.yml`:
 
 Override them with environment variables before startup if needed.
 
+You can either:
+
+- Sign in with the seeded account above
+- Create a new account from the UI and verify it with the date-based 6-digit code
+
 ### 3. Manual startup without Docker
 
 Start PostgreSQL locally first.
@@ -94,8 +112,14 @@ export DATABASE_URL='postgresql+psycopg://capstone:capstone@localhost:5432/capst
 export APP_LOGIN_EMAIL='dr.maya.kim@northstar-clinic.test'
 export APP_LOGIN_PASSWORD='NorthstarDemo!2026'
 export JWT_SECRET='change-me-in-production'
-uvicorn app.main:app --reload
+./.venv/bin/python -m uvicorn app.main:app --reload
 ```
+
+Notes:
+
+- Use the project virtualenv when starting the backend. Running a different global `uvicorn` may fail if it does not have `psycopg` installed.
+- If startup fails with a PostgreSQL connection error, make sure Postgres is actually running and reachable on `localhost:5432`.
+- If startup says port `8000` is already in use, another backend instance is already running.
 
 ### 5. Manual frontend
 
@@ -109,7 +133,9 @@ Frontend: `http://localhost:5173`
 
 Backend docs: `http://localhost:8000/docs`
 
-Manual login credentials:
+Seeded login credentials:
 
 - Email: `dr.maya.kim@northstar-clinic.test`
 - Password: `NorthstarDemo!2026`
+
+You can also create a new account from the sign-up page.
