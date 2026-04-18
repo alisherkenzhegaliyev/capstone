@@ -24,7 +24,10 @@ Endpoints:
 
 import asyncio
 import base64
+import json
 import logging
+import uuid
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
@@ -39,9 +42,14 @@ import torch
 import torch.nn as nn
 import torchvision
 import torchvision.transforms as T
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from PIL import Image
+from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
+from app.db import get_db
+from app.models import Prediction, User
+from app.redis_client import get_redis
 from app.services.llm_summarizer import summarize_xray
 
 from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
@@ -215,7 +223,11 @@ def _ndarray_to_base64(arr: np.ndarray) -> str:
 # PREDICTION ENDPOINT
 # ======================================================
 @router.post("/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Accepts a chest X-ray image and returns:
       - status: "ABNORMAL" or "NORMAL"
@@ -330,15 +342,58 @@ async def predict(file: UploadFile = File(...)):
             summarize_xray, status, findings, CONFIDENCE_THRESHOLD
         )
 
-        return {
+        prediction_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
+        original_image_b64 = _ndarray_to_base64(original_display)
+
+        response = {
             "status": status,
             "findings": findings,
-            "original_image": _ndarray_to_base64(original_display),
+            "original_image": original_image_b64,
             "filename": file.filename,
             "thresholds": "per-class (Youden-optimised on NIH ChestX-ray14)",
             "model": "CheXNet (DenseNet-121)",
             "summary": summary,
+            "prediction_id": prediction_id,
         }
+
+        # Full entry for Redis (7-day TTL) — includes base64 images
+        full_entry = {
+            "id": prediction_id,
+            "createdAt": now.isoformat(),
+            "feature": "xray",
+            "prediction": response,
+        }
+
+        # Slim entry for Postgres — strip images to keep DB lean
+        slim_findings = [
+            {**f, "gradcam_image": None, "gradcam_plus_image": None}
+            for f in findings
+        ]
+        slim_entry = {
+            "id": prediction_id,
+            "createdAt": now.isoformat(),
+            "feature": "xray",
+            "prediction": {**response, "original_image": "", "findings": slim_findings},
+        }
+
+        r = get_redis()
+        if r:
+            try:
+                r.setex(f"xray:{prediction_id}", 7 * 24 * 3600, json.dumps(full_entry))
+            except Exception as exc:
+                logger.warning("Redis cache write failed: %s", exc)
+
+        db.add(Prediction(
+            id=prediction_id,
+            user_id=current_user.id,
+            feature="xray",
+            entry_json=json.dumps(slim_entry),
+            created_at=now,
+        ))
+        db.commit()
+
+        return response
 
     except Exception as exc:
         logger.exception("Prediction failed for %s", file.filename)

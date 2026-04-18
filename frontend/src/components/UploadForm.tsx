@@ -7,9 +7,10 @@ import type { HistoryEntry } from "../types/history";
 import FileUploader from "./FileUploader";
 import XrayVisualizationView from "./XrayVisualizationView";
 import { predictXray } from "../api/api";
+import { fetchHistoryEntry } from "../api/history";
 import { DotScreenShader } from "./DotScreenShader";
 import { useAuth } from "../auth/AuthContext";
-import { createHistoryId, saveHistoryEntry } from "../lib/history";
+import { saveHistoryEntry } from "../lib/history";
 
 interface UploadFormProps {
   initialEntry?: Extract<HistoryEntry, { feature: "xray" }>;
@@ -19,10 +20,26 @@ export default function UploadForm({ initialEntry }: UploadFormProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [xrayPrediction, setXrayPrediction] = useState<XrayPrediction | null>(initialEntry?.prediction ?? null);
+  const [xrayPrediction, setXrayPrediction] = useState<XrayPrediction | null>(
+    initialEntry?.prediction ?? null
+  );
 
   useEffect(() => {
-    setXrayPrediction(initialEntry?.prediction ?? null);
+    const pred = initialEntry?.prediction ?? null;
+    setXrayPrediction(pred);
+
+    // If opened from history and images were stripped, fetch full result from server
+    if (pred && !pred.original_image && initialEntry?.id) {
+      fetchHistoryEntry(initialEntry.id)
+        .then((entry) => {
+          if (entry.feature === "xray") {
+            setXrayPrediction(entry.prediction);
+          }
+        })
+        .catch(() => {
+          // Keep the stripped version — user sees "re-upload to view" placeholder
+        });
+    }
   }, [initialEntry]);
 
   async function handleUpload(file: File) {
@@ -33,7 +50,7 @@ export default function UploadForm({ initialEntry }: UploadFormProps) {
       setXrayPrediction(prediction);
       if (user?.email) {
         saveHistoryEntry(user.email, {
-          id: createHistoryId(),
+          id: prediction.prediction_id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           createdAt: new Date().toISOString(),
           feature: "xray",
           prediction,
@@ -71,8 +88,6 @@ export default function UploadForm({ initialEntry }: UploadFormProps) {
               fillEntireScreen={true}
             />
           </div>
-
-          {/* Top gradient fade */}
         </>
       )}
       <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-[#fef3c7] to-transparent z-[5]"></div>

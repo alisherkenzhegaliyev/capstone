@@ -64,7 +64,8 @@ export interface XrayPrediction {
   findings: Finding[];
   original_image: string;
   filename: string;
-  threshold: number;
+  threshold?: number;
   model: string;
   summary: string | null;
+  prediction_id?: string;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { clearHistoryEntries, getHistoryEntries } from "../lib/history";
+import { fetchHistory } from "../api/history";
 import type { HistoryEntry } from "../types/history";
 
 function formatTimestamp(value: string) {
@@ -20,8 +20,9 @@ function getEntryTitle(entry: HistoryEntry) {
 
 function getEntrySubtitle(entry: HistoryEntry) {
   if (entry.feature === "xray") {
+    const threshold = entry.prediction.threshold ?? 0.5;
     const flagged = entry.prediction.findings.filter(
-      (finding) => finding.probability >= entry.prediction.threshold
+      (f) => f.probability >= threshold
     ).length;
     return `${entry.prediction.status} • ${flagged} flagged finding${flagged === 1 ? "" : "s"}`;
   }
@@ -36,12 +37,8 @@ function getDestination(entry: HistoryEntry) {
 }
 
 function getFeatureLabel(entry: HistoryEntry) {
-  if (entry.feature === "xray") {
-    return "Chest X-ray";
-  }
-  if (entry.feature === "chd") {
-    return "CHD";
-  }
+  if (entry.feature === "xray") return "Chest X-ray";
+  if (entry.feature === "chd") return "CHD";
   return "Readmission";
 }
 
@@ -49,24 +46,17 @@ export default function HistoryPage() {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.email) {
-      setEntries([]);
-      return;
-    }
-
-    setEntries(getHistoryEntries(user.email));
-  }, [user?.email]);
-
-  const handleClearHistory = () => {
-    if (!user?.email) {
-      return;
-    }
-
-    clearHistoryEntries(user.email);
-    setEntries([]);
-  };
+    setLoading(true);
+    setError(null);
+    fetchHistory()
+      .then(setEntries)
+      .catch(() => setError("Could not load history. Check your connection."))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -92,30 +82,35 @@ export default function HistoryPage() {
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">Saved Analyses</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Recent X-ray and clinical decision support runs are stored locally on this device.
-            </p>
-          </div>
-          <button
-            onClick={handleClearHistory}
-            disabled={entries.length === 0}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Clear History
-          </button>
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-slate-900">Saved Analyses</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            X-ray and clinical decision support runs, stored server-side.
+          </p>
         </div>
 
-        {entries.length === 0 ? (
+        {loading && (
+          <div className="rounded-2xl border border-slate-200 bg-white px-8 py-16 text-center">
+            <p className="text-sm text-slate-500">Loading history…</p>
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-8 py-6 text-center">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && entries.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-8 py-16 text-center">
             <h3 className="text-lg font-semibold text-slate-900">No history yet</h3>
             <p className="mt-2 text-sm text-slate-500">
               Run an X-ray upload or a clinical assessment and it will appear here.
             </p>
           </div>
-        ) : (
+        )}
+
+        {!loading && !error && entries.length > 0 && (
           <div className="grid gap-4">
             {entries.map((entry) => (
               <div

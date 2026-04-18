@@ -1,8 +1,17 @@
 """
 Case 2: Hospital Readmission Risk Prediction API endpoints.
 """
-from fastapi import APIRouter
+import json
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_user
+from app.db import get_db
+from app.models import Prediction, User
 from app.services.readmission_predictor import (
     encode_patient, predict_readmission,
     explain_shap_readmission, explain_lime_readmission,
@@ -58,7 +67,6 @@ class PatientReadmission(BaseModel):
 def _to_raw(patient: PatientReadmission) -> dict:
     """Convert Pydantic model to raw dict with hyphenated medication keys."""
     raw = patient.model_dump()
-    # Fix hyphenated keys
     raw['glyburide-metformin'] = raw.pop('glyburide_metformin')
     raw['glipizide-metformin'] = raw.pop('glipizide_metformin')
     raw['glimepiride-pioglitazone'] = raw.pop('glimepiride_pioglitazone')
@@ -68,13 +76,39 @@ def _to_raw(patient: PatientReadmission) -> dict:
 
 
 @router.post("/predict")
-def readmission_predict(patient: PatientReadmission):
+def readmission_predict(
+    patient: PatientReadmission,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     raw = _to_raw(patient)
     encoded = encode_patient(raw)
     result = predict_readmission(encoded)
     shap_exp = explain_shap_readmission(encoded)
     summary = summarize_readmission(result["probability"], result["risk_level"], shap_exp["features"])
-    return {**result, "shap_explanation": shap_exp, "summary": summary}
+    prediction_result = {**result, "shap_explanation": shap_exp, "summary": summary}
+
+    prediction_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+
+    entry = {
+        "id": prediction_id,
+        "createdAt": now.isoformat(),
+        "feature": "readmission",
+        "input": patient.model_dump(),
+        "result": prediction_result,
+    }
+
+    db.add(Prediction(
+        id=prediction_id,
+        user_id=current_user.id,
+        feature="readmission",
+        entry_json=json.dumps(entry),
+        created_at=now,
+    ))
+    db.commit()
+
+    return {**prediction_result, "prediction_id": prediction_id}
 
 
 @router.post("/explain-lime")

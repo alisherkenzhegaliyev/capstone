@@ -25,6 +25,15 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("MPLCONFIGDIR", str(MPL_CACHE_DIR))
 os.environ.setdefault("XDG_CACHE_HOME", str(CACHE_DIR))
 
+try:
+    from app.routers.history import router as history_router
+    _history_available = True
+except Exception as _e:
+    import traceback
+    print(f"WARNING: history router not loaded — {_e}")
+    traceback.print_exc()
+    _history_available = False
+
 # analyze router requires torch + grad-cam — only import if available
 try:
     from app.routers.auth import router as auth_router
@@ -102,6 +111,8 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if _auth_available:
     app.include_router(auth_router)
+if _history_available:
+    app.include_router(history_router)
 if _analyze_available:
     app.include_router(analyze_router, dependencies=[Depends(get_current_user)])
 if _chd_available:
