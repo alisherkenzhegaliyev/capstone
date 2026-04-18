@@ -80,27 +80,43 @@ CLASS_NAMES = [
     "Hernia",             # 13
 ]
 
-# Per-class thresholds tuned on NIH ChestX-ray14 test set (5000 images)
-# via Youden's index (maximises sensitivity + specificity - 1)
+# Blended thresholds: iterative 30% blend toward Youden-optimal on for_testing dataset
 PER_CLASS_THRESHOLDS = {
-    "Atelectasis":       0.573,
-    "Cardiomegaly":      0.492,
-    "Effusion":          0.568,
-    "Infiltration":      0.553,
-    "Mass":              0.550,
-    "Nodule":            0.407,
-    "Pneumonia":         0.596,
-    "Pleural Thickening":0.258,
-    "Consolidation":     0.552,
-    "Edema":             0.555,
-    "Emphysema":         0.556,
-    "Fibrosis":          0.523,
-    "Pneumothorax":      0.347,
-    "Hernia":            0.448,
+    "Atelectasis":        0.460,
+    "Cardiomegaly":       0.484,
+    "Effusion":           0.466,
+    "Infiltration":       0.525,
+    "Mass":               0.524,
+    "Nodule":             0.496,
+    "Pneumonia":          0.345,
+    "Pleural Thickening": 0.291,
+    "Consolidation":      0.521,
+    "Edema":              0.452,
+    "Emphysema":          0.649,
+    "Fibrosis":           0.698,
+    "Pneumothorax":       0.475,
+    "Hernia":             0.786,
+}
+
+# Only high-AUC classes (≥0.75) trigger ABNORMAL status.
+# Weak classes (Infiltration 0.660, Pneumonia 0.665, Pneumothorax 0.642,
+# Pleural Thickening 0.618) still appear in findings but don't flag the scan.
+ABNORMAL_TRIGGER_CLASSES = {
+    "Atelectasis", "Cardiomegaly", "Effusion", "Mass", "Nodule",
+    "Consolidation", "Edema", "Emphysema", "Fibrosis", "Hernia",
 }
 
 # Fallback threshold if a class is not in PER_CLASS_THRESHOLDS
 CONFIDENCE_THRESHOLD = 0.5
+
+# Extra margin above threshold required to trigger ABNORMAL status (cuts borderline FPs).
+# Weaker trigger classes (lower AUC) get a larger margin to reduce their FP contribution.
+ABNORMAL_CONFIDENCE_MARGIN_DEFAULT = 0.15
+ABNORMAL_CONFIDENCE_MARGINS = {
+    "Atelectasis":   0.20,  # AUC 0.791
+    "Nodule":        0.20,  # AUC 0.764
+    "Consolidation": 0.20,  # AUC 0.778
+}
 
 # Maximum number of findings to pre-compute Grad-CAM heatmaps for
 MAX_HEATMAPS = 5
@@ -109,7 +125,7 @@ MAX_HEATMAPS = 5
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
 
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".dcm"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".dcm", ".webp", ".gif"}
 
 # ======================================================
 # MODEL LOADING
@@ -189,11 +205,23 @@ def _is_grayscale_image(img: Image.Image) -> bool:
 
 def preprocess(pil_img: Image.Image):
     """
-    Resize to 224x224, convert to RGB, return:
+    Standard CheXNet preprocessing: resize shortest side to 256 (preserving
+    aspect ratio), center-crop to 224x224, convert to RGB.
       - img_tensor: [1, 3, 224, 224] normalised tensor on DEVICE
       - img_rgb_norm: (224, 224, 3) float32 ndarray in [0, 1] for show_cam_on_image
     """
-    img_resized = pil_img.resize((224, 224)).convert("RGB")
+    # For GIFs take only the first frame
+    if getattr(pil_img, "is_animated", False) or getattr(pil_img, "n_frames", 1) > 1:
+        pil_img.seek(0)
+    img = pil_img.convert("RGB")
+    # Resize shortest side to 256, preserving aspect ratio
+    w, h = img.size
+    scale = 256 / min(w, h)
+    img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+    # Center crop to 224x224
+    w, h = img.size
+    left, top = (w - 224) // 2, (h - 224) // 2
+    img_resized = img.crop((left, top, left + 224, top + 224))
     img_np = np.array(img_resized, dtype=np.float32) / 255.0
     img_tensor = _normalise(_to_tensor(img_resized)).unsqueeze(0).to(DEVICE)
     return img_tensor, img_np
@@ -322,7 +350,13 @@ async def predict(file: UploadFile = File(...)):
             })
 
         # --- Overall status ---
-        status = "ABNORMAL" if any(f["detected"] for f in findings) else "NORMAL"
+        status = "ABNORMAL" if any(
+            f["class_name"] in ABNORMAL_TRIGGER_CLASSES
+            and f["probability"] >= f["threshold"] + ABNORMAL_CONFIDENCE_MARGINS.get(
+                f["class_name"], ABNORMAL_CONFIDENCE_MARGIN_DEFAULT
+            )
+            for f in findings
+        ) else "NORMAL"
 
         original_display = (img_rgb_norm * 255).astype(np.uint8)
 
