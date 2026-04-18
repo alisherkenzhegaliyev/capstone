@@ -149,6 +149,18 @@ Frontend: `http://localhost:5173`
 
 Backend docs: `http://localhost:8000/docs`
 
+### 5.1 Frontend tests
+
+Run the UI test suite with:
+
+```bash
+cd frontend
+npm install
+npm test
+```
+
+This runs the Vitest-based frontend tests in one-shot mode.
+
 Seeded login credentials:
 
 - Email: `dr.maya.kim@northstar-clinic.test`
