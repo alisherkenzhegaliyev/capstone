@@ -112,8 +112,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#fef3c7] px-4 py-12 flex items-center justify-center">
-      <div className="w-full max-w-md rounded-3xl border border-amber-200 bg-white p-8 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-        <div className="mb-8">
+      <div className="flex min-h-[680px] w-full max-w-md flex-col rounded-3xl border border-amber-200 bg-white p-8 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
+        <div className="mb-8 min-h-[132px]">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-red-500">
             Capstone Access
           </p>
@@ -133,8 +133,9 @@ export default function LoginPage() {
           </p>
         </div>
 
+        <div className="flex flex-1 flex-col">
         {showVerificationStep ? (
-          <form onSubmit={handleVerify} className="space-y-5">
+          <form onSubmit={handleVerify} className="flex flex-1 flex-col space-y-5">
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-slate-700">Email</span>
               <input
@@ -182,31 +183,33 @@ export default function LoginPage() {
               </div>
             ) : null}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-300"
-            >
-              {loading ? "Verifying..." : "Verify email"}
-            </button>
+            <div className="mt-auto space-y-3 pt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                {loading ? "Verifying..." : "Verify email"}
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setShowVerificationStep(false);
-                setMode("signin");
-                setVerificationDigits(Array.from({ length: 6 }, () => ""));
-                setNotice("");
-                setError("");
-              }}
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              Back to sign in
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVerificationStep(false);
+                  setMode("signin");
+                  setVerificationDigits(Array.from({ length: 6 }, () => ""));
+                  setNotice("");
+                  setError("");
+                }}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Back to sign in
+              </button>
+            </div>
           </form>
         ) : (
           <>
-            <div className="mb-5 grid grid-cols-2 rounded-2xl bg-slate-200 p-1 text-sm font-semibold text-slate-700">
+            <div className="mb-5 grid grid-cols-2 gap-1 rounded-2xl bg-slate-200 p-1 text-sm font-semibold text-slate-700">
               <button
                 type="button"
                 onClick={() => {
@@ -235,7 +238,7 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="flex flex-1 flex-col space-y-5">
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-slate-700">Email</span>
                 <input
@@ -272,22 +275,25 @@ export default function LoginPage() {
                 </div>
               ) : null}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-300"
-              >
-                {loading
-                  ? mode === "signup"
-                    ? "Creating account..."
-                    : "Signing in..."
-                  : mode === "signup"
-                    ? "Create account"
-                    : "Sign in"}
-              </button>
+              <div className="mt-auto pt-4">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  {loading
+                    ? mode === "signup"
+                      ? "Creating account..."
+                      : "Signing in..."
+                    : mode === "signup"
+                      ? "Create account"
+                      : "Sign in"}
+                </button>
+              </div>
             </form>
           </>
         )}
+        </div>
       </div>
     </div>
   );
