@@ -1,106 +1,106 @@
 {
-  "model_info": {
-    "best_model_type": "RandomForestClassifier",
-    "best_model_name": "Random Forest",
-    "use_case": "10-Year Cardiovascular Disease Risk",
-    "all_models": [
-      "XGBoost",
-      "Random Forest",
-      "Logistic Regression",
-      "SVM",
-      "KNN"
-    ]
-  },
-  "features": {
-    "feature_names": [
-      "age",
-      "sex",
-      "total_cholesterol",
-      "systolic_bp",
-      "smoking",
-      "diabetes",
-      "bmi",
-      "heart_rate",
-      "glucose",
-      "bp_meds",
-      "prevalent_hypertension",
-      "cigs_per_day",
-      "pulse_pressure"
-    ],
-    "n_features": 13,
-    "feature_display_names": {
-      "age": "Age (years)",
-      "sex": "Sex (1=Male, 0=Female)",
-      "total_cholesterol": "Total Cholesterol (mg/dL)",
-      "systolic_bp": "Systolic Blood Pressure (mmHg)",
-      "smoking": "Current Smoker (1=Yes, 0=No)",
-      "diabetes": "Diabetes (1=Yes, 0=No)",
-      "bmi": "Body Mass Index",
-      "heart_rate": "Heart Rate (bpm)",
-      "glucose": "Glucose Level (mg/dL)",
-      "bp_meds": "BP Medications (1=Yes, 0=No)",
-      "prevalent_hypertension": "Hypertension (1=Yes, 0=No)",
-      "cigs_per_day": "Cigarettes Per Day",
-      "pulse_pressure": "Pulse Pressure (mmHg)"
+    "model_info": {
+        "best_model_type": "SVC",
+        "best_model_name": "SVM",
+        "use_case": "10-Year Cardiovascular Disease Risk",
+        "all_models": [
+            "XGBoost",
+            "Random Forest",
+            "Logistic Regression",
+            "SVM",
+            "KNN"
+        ]
+    },
+    "features": {
+        "feature_names": [
+            "age",
+            "sex",
+            "total_cholesterol",
+            "systolic_bp",
+            "smoking",
+            "diabetes",
+            "bmi",
+            "heart_rate",
+            "glucose",
+            "bp_meds",
+            "prevalent_hypertension",
+            "cigs_per_day",
+            "pulse_pressure"
+        ],
+        "n_features": 13,
+        "feature_display_names": {
+            "age": "Age (years)",
+            "sex": "Sex (1=Male, 0=Female)",
+            "total_cholesterol": "Total Cholesterol (mg/dL)",
+            "systolic_bp": "Systolic Blood Pressure (mmHg)",
+            "smoking": "Current Smoker (1=Yes, 0=No)",
+            "diabetes": "Diabetes (1=Yes, 0=No)",
+            "bmi": "Body Mass Index",
+            "heart_rate": "Heart Rate (bpm)",
+            "glucose": "Glucose Level (mg/dL)",
+            "bp_meds": "BP Medications (1=Yes, 0=No)",
+            "prevalent_hypertension": "Hypertension (1=Yes, 0=No)",
+            "cigs_per_day": "Cigarettes Per Day",
+            "pulse_pressure": "Pulse Pressure (mmHg)"
+        }
+    },
+    "target": {
+        "target_name": "TenYearCHD",
+        "target_description": "10-Year Coronary Heart Disease Risk",
+        "classes": [
+            "No CHD",
+            "CHD"
+        ]
+    },
+    "performance": {
+        "XGBoost": {
+            "accuracy": 0.7264150943396226,
+            "f1_score": 0.3333333333333333,
+            "roc_auc": 0.6821813241905748,
+            "pr_auc": 0.30388748328367443
+        },
+        "Random Forest": {
+            "accuracy": 0.7346698113207547,
+            "f1_score": 0.34402332361516036,
+            "roc_auc": 0.6844131060581556,
+            "pr_auc": 0.3154342570658565
+        },
+        "Logistic Regression": {
+            "accuracy": 0.7535377358490566,
+            "f1_score": 0.33650793650793653,
+            "roc_auc": 0.7017390648079266,
+            "pr_auc": 0.3074906397977389
+        },
+        "SVM": {
+            "accuracy": 0.6580188679245284,
+            "f1_score": 0.36123348017621143,
+            "roc_auc": 0.7035503660337893,
+            "pr_auc": 0.296327636674107
+        },
+        "KNN": {
+            "accuracy": 0.6308962264150944,
+            "f1_score": 0.2870159453302961,
+            "roc_auc": 0.6380901553622064,
+            "pr_auc": 0.25632270277782065
+        }
+    },
+    "thresholds": {
+        "XGBoost": 0.5580973625183105,
+        "Random Forest": 0.438611792537405,
+        "Logistic Regression": 0.43215605975166144,
+        "SVM": 0.5444395711418727,
+        "KNN": 0.4637655634275001
+    },
+    "preprocessing": {
+        "imputation_strategy": "median",
+        "scaling": "StandardScaler",
+        "smote_applied": true,
+        "smote_sampling_strategy": 0.8
+    },
+    "training_info": {
+        "training_date": "2026-03-07T14:04:22.735907",
+        "training_samples": 5178,
+        "test_samples": 848,
+        "random_state": 42
     }
-  },
-  "target": {
-    "target_name": "TenYearCHD",
-    "target_description": "10-Year Coronary Heart Disease Risk",
-    "classes": [
-      "No CHD",
-      "CHD"
-    ]
-  },
-  "performance": {
-    "XGBoost": {
-      "accuracy": 0.7264150943396226,
-      "f1_score": 0.3333333333333333,
-      "roc_auc": 0.6821813241905748,
-      "pr_auc": 0.30388748328367443
-    },
-    "Random Forest": {
-      "accuracy": 0.7346698113207547,
-      "f1_score": 0.34402332361516036,
-      "roc_auc": 0.6844131060581556,
-      "pr_auc": 0.3154342570658565
-    },
-    "Logistic Regression": {
-      "accuracy": 0.7535377358490566,
-      "f1_score": 0.33650793650793653,
-      "roc_auc": 0.7017390648079266,
-      "pr_auc": 0.3074906397977389
-    },
-    "SVM": {
-      "accuracy": 0.6580188679245284,
-      "f1_score": 0.36123348017621143,
-      "roc_auc": 0.7035503660337893,
-      "pr_auc": 0.296327636674107
-    },
-    "KNN": {
-      "accuracy": 0.6308962264150944,
-      "f1_score": 0.2870159453302961,
-      "roc_auc": 0.6380901553622064,
-      "pr_auc": 0.25632270277782065
-    }
-  },
-  "thresholds": {
-    "XGBoost": 0.5580973625183105,
-    "Random Forest": 0.438611792537405,
-    "Logistic Regression": 0.43215605975166144,
-    "SVM": 0.5444395711418727,
-    "KNN": 0.4637655634275001
-  },
-  "preprocessing": {
-    "imputation_strategy": "median",
-    "scaling": "StandardScaler",
-    "smote_applied": true,
-    "smote_sampling_strategy": 0.8
-  },
-  "training_info": {
-    "training_date": "2026-03-07T14:04:22.735907",
-    "training_samples": 5178,
-    "test_samples": 848,
-    "random_state": 42
-  }
 }
